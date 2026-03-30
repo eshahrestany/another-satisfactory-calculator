@@ -1,0 +1,13 @@
+# Rust
+backend/target/
+*.db
+
+# Node
+frontend/node_modules/
+frontend/dist/
+
+# IDE
+.idea/
+
+# OS
+.DS_Store

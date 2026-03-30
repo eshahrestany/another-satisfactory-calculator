@@ -1,0 +1,166 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* === INDUSTRIAL THEME ANIMATIONS === */
+
+@keyframes scanline {
+  0% { transform: translateY(-100%); }
+  100% { transform: translateY(100vh); }
+}
+
+@keyframes pulse-glow {
+  0%, 100% { opacity: 0.4; }
+  50% { opacity: 1; }
+}
+
+@keyframes conveyor-flow {
+  0% { stroke-dashoffset: 24; }
+  100% { stroke-dashoffset: 0; }
+}
+
+@keyframes gear-spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+@keyframes flicker {
+  0%, 100% { opacity: 1; }
+  92% { opacity: 1; }
+  93% { opacity: 0.8; }
+  94% { opacity: 1; }
+  96% { opacity: 0.6; }
+  97% { opacity: 1; }
+}
+
+@keyframes stamp-in {
+  0% { transform: scale(1.1); opacity: 0; }
+  60% { transform: scale(0.98); opacity: 1; }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+@keyframes data-stream {
+  0% { background-position: 0% 0%; }
+  100% { background-position: 0% 100%; }
+}
+
+@keyframes caution-slide {
+  0% { background-position: 0 0; }
+  100% { background-position: 40px 0; }
+}
+
+@keyframes hum-pulse {
+  0%, 100% { box-shadow: inset 0 0 20px rgba(232, 166, 48, 0.05); }
+  50% { box-shadow: inset 0 0 20px rgba(232, 166, 48, 0.12); }
+}
+
+@keyframes rivet-shine {
+  0%, 100% { opacity: 0.3; }
+  50% { opacity: 0.6; }
+}
+
+body {
+  margin: 0;
+  background: #0a0a16;
+  color: #e0e0e0;
+  font-family: 'JetBrains Mono', monospace;
+}
+
+#root {
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* XY Flow overrides for industrial look */
+.react-flow__edge-path {
+  stroke-dasharray: 8 4;
+  animation: conveyor-flow 0.6s linear infinite;
+}
+
+/* Remove default white background from node wrappers */
+.react-flow__node {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  padding: 0 !important;
+}
+
+.react-flow__controls {
+  background: #1a1a2e !important;
+  border: 1px solid #3a3a5c !important;
+  border-radius: 2px !important;
+  box-shadow: 2px 2px 0 rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.05) !important;
+}
+
+.react-flow__controls button {
+  background: #252540 !important;
+  border-color: #3a3a5c !important;
+  color: #e8a630 !important;
+  fill: #e8a630 !important;
+}
+
+.react-flow__controls button:hover {
+  background: #3a3a5c !important;
+}
+
+.react-flow__controls button svg {
+  fill: #e8a630 !important;
+}
+
+/* Industrial scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #0f0f1e;
+}
+::-webkit-scrollbar-thumb {
+  background: #3a3a5c;
+  border-radius: 0;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #e8a630;
+}
+
+/* Utility classes */
+.industrial-panel {
+  background: linear-gradient(180deg, #252540 0%, #1e1e36 100%);
+  border: 1px solid #3a3a5c;
+  box-shadow: 2px 2px 0 rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.04);
+}
+
+.industrial-inset {
+  background: #0f0f1e;
+  border: 1px solid #2a2a44;
+  box-shadow: inset 2px 2px 4px rgba(0,0,0,0.5), inset -1px -1px 0 rgba(255,255,255,0.02);
+}
+
+.rivet {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 35%, #555577, #2a2a44);
+  box-shadow: inset 0 1px 1px rgba(255,255,255,0.15), 0 1px 2px rgba(0,0,0,0.5);
+  animation: rivet-shine 4s ease-in-out infinite;
+}
+
+.caution-stripe {
+  background: repeating-linear-gradient(
+    -45deg,
+    transparent,
+    transparent 5px,
+    rgba(232, 166, 48, 0.08) 5px,
+    rgba(232, 166, 48, 0.08) 10px
+  );
+}
+
+.metal-texture {
+  background-image:
+    linear-gradient(180deg, rgba(255,255,255,0.03) 0%, transparent 50%, rgba(0,0,0,0.1) 100%);
+}
+
+.node-stamp {
+  animation: stamp-in 0.3s ease-out;
+}
