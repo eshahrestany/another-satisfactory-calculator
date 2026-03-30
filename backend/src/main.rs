@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use axum::{
+    middleware as axum_middleware,
     routing::{get, post},
     Router,
 };
@@ -9,6 +10,7 @@ use tower_http::cors::{Any, CorsLayer};
 use tracing_subscriber;
 
 mod db;
+mod middleware;
 mod models;
 mod routes;
 mod solver;
@@ -58,6 +60,7 @@ async fn main() {
                 .put(routes::factories::update_factory)
                 .delete(routes::factories::delete_factory),
         )
+        .layer(axum_middleware::from_fn(middleware::user_id::user_id_middleware))
         .layer(cors)
         .with_state(state);
 
