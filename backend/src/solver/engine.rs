@@ -185,7 +185,7 @@ fn build_graph(
     targets: &[ProductionTarget],
     settings: &GameSettings,
     somersloops: &HashMap<String, bool>,
-    game_data: &GameData,
+    _game_data: &GameData,
     item_map: &HashMap<&str, &crate::models::game_data::Item>,
     building_map: &HashMap<&str, &crate::models::game_data::Building>,
 ) -> Result<SolveResponse, String> {

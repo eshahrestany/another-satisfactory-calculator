@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 import {
   ReactFlow,
   Background,
@@ -8,8 +8,6 @@ import {
   type Node,
   type Edge,
   type NodeMouseHandler,
-  type OnNodesChange,
-  type OnEdgesChange,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 
@@ -54,7 +52,7 @@ export function FactoryGraph() {
       id: n.id,
       type: n.node_type,
       position: { x: 0, y: 0 },
-      data: n,
+      data: n as unknown as Record<string, unknown>,
       draggable: true,
     }));
 

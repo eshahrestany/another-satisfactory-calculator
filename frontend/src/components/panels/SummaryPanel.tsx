@@ -1,5 +1,5 @@
 import { useFactoryStore } from '../../stores/useFactoryStore';
-import { formatRate, formatPower, formatCount } from '../../utils/formatting';
+import { formatRate, formatPower } from '../../utils/formatting';
 
 export function SummaryPanel() {
   const solveResult = useFactoryStore((s) => s.solveResult);

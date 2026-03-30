@@ -59,6 +59,7 @@ pub struct RawDataFile {
 }
 
 #[derive(Debug, Deserialize)]
+#[allow(dead_code)]
 pub struct RawItem {
     pub name: String,
     #[serde(default)]
@@ -78,6 +79,7 @@ pub struct RawRecipeIngredient {
 }
 
 #[derive(Debug, Deserialize)]
+#[allow(dead_code)]
 pub struct RawRecipe {
     pub name: String,
     #[serde(rename = "className")]
@@ -104,6 +106,7 @@ pub struct RawRecipe {
 }
 
 #[derive(Debug, Deserialize)]
+#[allow(dead_code)]
 pub struct RawBuildingMetadata {
     #[serde(rename = "powerConsumption", default)]
     pub power_consumption: f64,
@@ -112,6 +115,7 @@ pub struct RawBuildingMetadata {
 }
 
 #[derive(Debug, Deserialize)]
+#[allow(dead_code)]
 pub struct RawBuilding {
     pub name: String,
     #[serde(rename = "className")]
@@ -160,7 +164,7 @@ impl GameData {
             })
             .collect();
 
-        let item_map: HashMap<&str, &RawItem> = raw
+        let _item_map: HashMap<&str, &RawItem> = raw
             .items
             .iter()
             .map(|(k, v)| (k.as_str(), v))
