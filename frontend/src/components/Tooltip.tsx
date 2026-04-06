@@ -44,7 +44,7 @@ function Arrow({ side }: { side: Placement }) {
 export function Tooltip({ text, children, delay = 400, side = 'top', className }: TooltipProps) {
   const [show, setShow] = useState(false);
   const [pos, setPos] = useState({ x: 0, y: 0 });
-  const timerRef = useRef<ReturnType<typeof setTimeout>>();
+  const timerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
   const triggerRef = useRef<HTMLSpanElement>(null);
 
   const handleEnter = useCallback(() => {
