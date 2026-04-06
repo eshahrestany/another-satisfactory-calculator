@@ -49,6 +49,7 @@ async fn main() {
         .route("/api/items", get(routes::game_data::get_items))
         .route("/api/recipes", get(routes::game_data::get_recipes))
         .route("/api/buildings", get(routes::game_data::get_buildings))
+        .route("/api/generators", get(routes::game_data::get_generators))
         // Solver route
         .route("/api/solve", post(routes::solver::solve_production))
         // Factory CRUD routes

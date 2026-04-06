@@ -11,6 +11,7 @@ pub struct Item {
     pub category: String,
     pub is_resource: bool,
     pub is_liquid: bool,
+    pub energy_value: f64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -41,10 +42,20 @@ pub struct Building {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Generator {
+    pub id: String,
+    pub name: String,
+    pub fuel_items: Vec<String>,
+    pub power_production_mw: f64,
+    pub water_to_power_ratio: f64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GameData {
     pub items: Vec<Item>,
     pub recipes: Vec<Recipe>,
     pub buildings: Vec<Building>,
+    pub generators: Vec<Generator>,
 }
 
 // === Raw deserialization types matching the official data.json ===
@@ -55,7 +66,9 @@ pub struct RawDataFile {
     pub recipes: HashMap<String, RawRecipe>,
     pub buildings: HashMap<String, RawBuilding>,
     pub resources: HashMap<String, RawResource>,
-    // schematics, generators, miners — not needed for solver
+    #[serde(default)]
+    pub generators: HashMap<String, RawGenerator>,
+    // schematics, miners — not needed for solver
 }
 
 #[derive(Debug, Deserialize)]
@@ -70,6 +83,8 @@ pub struct RawItem {
     pub liquid: bool,
     #[serde(rename = "stackSize", default)]
     pub stack_size: u32,
+    #[serde(rename = "energyValue", default)]
+    pub energy_value: f64,
 }
 
 #[derive(Debug, Deserialize)]
@@ -129,6 +144,19 @@ pub struct RawResource {
     pub item: String,
 }
 
+#[derive(Debug, Deserialize)]
+#[allow(dead_code)]
+pub struct RawGenerator {
+    #[serde(rename = "className")]
+    pub class_name: String,
+    #[serde(rename = "powerProduction", default)]
+    pub power_production: f64,
+    #[serde(rename = "waterToPowerRatio", default)]
+    pub water_to_power_ratio: f64,
+    #[serde(default)]
+    pub fuel: Vec<String>,
+}
+
 impl GameData {
     /// Parse the official Satisfactory data.json into normalized GameData.
     pub fn from_raw(raw: &RawDataFile) -> Self {
@@ -160,6 +188,7 @@ impl GameData {
                     },
                     is_resource,
                     is_liquid: raw_item.liquid,
+                    energy_value: raw_item.energy_value,
                 }
             })
             .collect();
@@ -243,18 +272,41 @@ impl GameData {
             })
             .collect();
 
+        // Build generators (look up display name from buildings table)
+        let generators: Vec<Generator> = raw
+            .generators
+            .iter()
+            .filter(|(_, g)| !g.fuel.is_empty())
+            .map(|(class_name, raw_gen)| {
+                let name = raw
+                    .buildings
+                    .get(class_name)
+                    .map(|b| b.name.clone())
+                    .unwrap_or_else(|| class_name.clone());
+                Generator {
+                    id: class_name.clone(),
+                    name,
+                    fuel_items: raw_gen.fuel.clone(),
+                    power_production_mw: raw_gen.power_production,
+                    water_to_power_ratio: raw_gen.water_to_power_ratio,
+                }
+            })
+            .collect();
+
         tracing::info!(
-            "Parsed {} items, {} recipes ({} alternate), {} buildings",
+            "Parsed {} items, {} recipes ({} alternate), {} buildings, {} generators",
             items.len(),
             recipes.len(),
             recipes.iter().filter(|r| r.is_alternate).count(),
-            buildings.len()
+            buildings.len(),
+            generators.len()
         );
 
         GameData {
             items,
             recipes,
             buildings,
+            generators,
         }
     }
 }

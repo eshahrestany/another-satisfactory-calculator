@@ -1,12 +1,14 @@
 use serde::{Deserialize, Serialize};
 
-use super::solver_io::{GameSettings, ProductionTarget};
+use super::solver_io::{GameSettings, ProductionTarget, ProvidedInput};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FactoryConfig {
     pub targets: Vec<ProductionTarget>,
     pub allowed_recipes: Vec<String>,
     pub settings: GameSettings,
+    #[serde(default)]
+    pub provided_inputs: Vec<ProvidedInput>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

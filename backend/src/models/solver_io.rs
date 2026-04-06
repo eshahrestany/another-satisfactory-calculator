@@ -1,6 +1,12 @@
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ResourceConstraint {
+    pub item_id: String,
+    pub max_rate_per_minute: f64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SolveRequest {
     pub targets: Vec<ProductionTarget>,
     pub allowed_recipes: Vec<String>,
@@ -9,6 +15,41 @@ pub struct SolveRequest {
     /// so the LP naturally halves building count and cascades upstream.
     #[serde(default)]
     pub somersloops: std::collections::HashMap<String, bool>,
+    /// Items provided as external inputs to the factory (not extracted from raw nodes).
+    #[serde(default)]
+    pub provided_inputs: Vec<ProvidedInput>,
+    /// When set, switches to power plant mode with virtual generator recipes.
+    #[serde(default)]
+    pub power_mode: Option<PowerModeConfig>,
+    /// Upper-bound constraints on raw resource extraction rates.
+    #[serde(default)]
+    pub resource_constraints: Vec<ResourceConstraint>,
+    /// Default recipe IDs to exclude from the solve.
+    #[serde(default)]
+    pub disabled_recipes: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum NuclearChain {
+    JustUranium,
+    RecycleToPlutonium,
+    FullFicsonium,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PowerModeConfig {
+    pub generator_id: String,
+    pub fuel_id: String,
+    pub target_mw: f64,
+    #[serde(default)]
+    pub nuclear_chain: Option<NuclearChain>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProvidedInput {
+    pub item_id: String,
+    pub rate_per_minute: f64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -53,6 +94,8 @@ pub enum NodeType {
     Recipe,
     Resource,
     Output,
+    Input,
+    Generator,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -87,6 +130,9 @@ pub struct ProductionSummary {
     pub raw_resources: Vec<ItemRate>,
     pub total_buildings: f64,
     pub buildings_by_type: Vec<BuildingCount>,
+    /// Present in power mode: generator output minus factory consumption.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub net_power_mw: Option<f64>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

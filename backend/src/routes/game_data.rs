@@ -1,6 +1,6 @@
 use axum::{extract::State, Json};
 
-use crate::models::game_data::{Building, Item, Recipe};
+use crate::models::game_data::{Building, Generator, Item, Recipe};
 use crate::state::AppState;
 
 pub async fn get_items(State(state): State<AppState>) -> Json<Vec<Item>> {
@@ -13,4 +13,8 @@ pub async fn get_recipes(State(state): State<AppState>) -> Json<Vec<Recipe>> {
 
 pub async fn get_buildings(State(state): State<AppState>) -> Json<Vec<Building>> {
     Json(state.game_data.buildings.clone())
+}
+
+pub async fn get_generators(State(state): State<AppState>) -> Json<Vec<Generator>> {
+    Json(state.game_data.generators.clone())
 }
