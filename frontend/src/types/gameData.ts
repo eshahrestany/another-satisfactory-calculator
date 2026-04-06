@@ -4,6 +4,7 @@ export interface Item {
   category: string;
   is_resource: boolean;
   is_liquid: boolean;
+  energy_value: number;
 }
 
 export interface RecipeIngredient {
@@ -25,4 +26,12 @@ export interface Building {
   id: string;
   name: string;
   power_consumption_mw: number;
+}
+
+export interface Generator {
+  id: string;
+  name: string;
+  fuel_items: string[];
+  power_production_mw: number;
+  water_to_power_ratio: number;
 }

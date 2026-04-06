@@ -9,11 +9,25 @@ export interface GameSettings {
   clock_speed: number;
 }
 
+export interface ProvidedInput {
+  item_id: string;
+  rate_per_minute: number;
+}
+
+export interface ResourceConstraint {
+  item_id: string;
+  max_rate_per_minute: number;
+}
+
 export interface SolveRequest {
   targets: ProductionTarget[];
   allowed_recipes: string[];
   settings: GameSettings;
   somersloops: Record<string, boolean>;
+  provided_inputs: ProvidedInput[];
+  power_mode?: PowerModeConfig;
+  resource_constraints?: ResourceConstraint[];
+  disabled_recipes?: string[];
 }
 
 export interface ItemRate {
@@ -29,7 +43,16 @@ export interface BuildingCount {
   power_mw: number;
 }
 
-export type NodeType = 'recipe' | 'resource' | 'output';
+export type NuclearChain = 'just_uranium' | 'recycle_to_plutonium' | 'full_ficsonium';
+
+export interface PowerModeConfig {
+  generator_id: string;
+  fuel_id: string;
+  target_mw: number;
+  nuclear_chain?: NuclearChain;
+}
+
+export type NodeType = 'recipe' | 'resource' | 'output' | 'input' | 'generator';
 
 export interface ProductionNode {
   id: string;
@@ -60,6 +83,7 @@ export interface ProductionSummary {
   raw_resources: ItemRate[];
   total_buildings: number;
   buildings_by_type: BuildingCount[];
+  net_power_mw?: number;
 }
 
 export interface SolveResponse {

@@ -16,12 +16,16 @@ import { layoutGraph } from '../../utils/layoutGraph';
 import { RecipeNode } from './RecipeNode';
 import { ResourceNode } from './ResourceNode';
 import { OutputNode } from './OutputNode';
+import { InputNode } from './InputNode';
+import { GeneratorNode } from './GeneratorNode';
 import { formatRate } from '../../utils/formatting';
 
 const nodeTypes = {
   recipe: RecipeNode,
   resource: ResourceNode,
   output: OutputNode,
+  input: InputNode,
+  generator: GeneratorNode,
 };
 
 export function FactoryGraph() {

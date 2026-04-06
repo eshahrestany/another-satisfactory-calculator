@@ -2,52 +2,50 @@ import { useState } from 'react';
 import { useFactoryStore } from '../../stores/useFactoryStore';
 import { Tooltip } from '../Tooltip';
 
-export function TargetPanel() {
+export function InputPanel() {
   const items = useFactoryStore((s) => s.items);
-  const targets = useFactoryStore((s) => s.targets);
-  const addTarget = useFactoryStore((s) => s.addTarget);
-  const removeTarget = useFactoryStore((s) => s.removeTarget);
-  const updateTarget = useFactoryStore((s) => s.updateTarget);
+  const providedInputs = useFactoryStore((s) => s.providedInputs);
+  const addProvidedInput = useFactoryStore((s) => s.addProvidedInput);
+  const removeProvidedInput = useFactoryStore((s) => s.removeProvidedInput);
+  const updateProvidedInput = useFactoryStore((s) => s.updateProvidedInput);
 
   const [search, setSearch] = useState('');
   const [showDropdown, setShowDropdown] = useState(false);
 
-  const nonResourceItems = items
-    .filter((i) => !i.is_resource)
-    .sort((a, b) => a.name.localeCompare(b.name));
-  const filteredItems = nonResourceItems.filter((i) =>
+  const sortedItems = [...items].sort((a, b) => a.name.localeCompare(b.name));
+  const filteredItems = sortedItems.filter((i) =>
     i.name.toLowerCase().includes(search.toLowerCase())
   );
 
   const handleSelect = (itemId: string) => {
-    addTarget(itemId, 10);
+    addProvidedInput(itemId, 60);
     setSearch('');
     setShowDropdown(false);
   };
 
   return (
     <div>
-      <Tooltip text="Desired output items and rates. FICSIT does not accept 'zero' as a production target." side="right">
-        <h3 className="text-satisfactory-orange font-industrial font-bold text-xs mb-2 uppercase tracking-[0.2em] flex items-center gap-2">
-          <span className="text-satisfactory-muted">{'>'}</span> Production Targets
+      <Tooltip text="Pre-existing item supply. The solver will consume these before extracting additional resources." side="right">
+        <h3 className="text-cyan-400 font-industrial font-bold text-xs mb-2 uppercase tracking-[0.2em] flex items-center gap-2">
+          <span className="text-satisfactory-muted">{'>'}</span> Provided Inputs
         </h3>
       </Tooltip>
 
-      {targets.map((target, i) => {
-        const item = items.find((it) => it.id === target.item_id);
+      {providedInputs.map((input, i) => {
+        const item = items.find((it) => it.id === input.item_id);
         return (
           <div key={i} className="flex items-center gap-2 mb-2 group">
             <span className="text-xs text-satisfactory-text flex-1 truncate">
-              {item?.name ?? target.item_id}
+              {item?.name ?? input.item_id}
             </span>
             <input
               type="number"
               min={0}
               step={1}
-              value={target.rate_per_minute}
+              value={input.rate_per_minute}
               onChange={(e) =>
-                updateTarget(i, {
-                  ...target,
+                updateProvidedInput(i, {
+                  ...input,
                   rate_per_minute: parseFloat(e.target.value) || 0,
                 })
               }
@@ -55,7 +53,7 @@ export function TargetPanel() {
             />
             <span className="text-[10px] text-satisfactory-muted">/min</span>
             <button
-              onClick={() => removeTarget(i)}
+              onClick={() => removeProvidedInput(i)}
               className="text-red-500/60 hover:text-red-400 text-xs px-1 opacity-0 group-hover:opacity-100 transition-opacity"
             >
               [x]

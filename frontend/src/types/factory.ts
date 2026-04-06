@@ -1,9 +1,12 @@
-import type { GameSettings, ProductionTarget } from './solver';
+import type { GameSettings, ProductionTarget, ProvidedInput, PowerModeConfig } from './solver';
 
 export interface FactoryConfig {
   targets: ProductionTarget[];
+  provided_inputs: ProvidedInput[];
   allowed_recipes: string[];
   settings: GameSettings;
+  mode?: 'production' | 'power';
+  power_config?: PowerModeConfig;
 }
 
 export interface FactoryMeta {

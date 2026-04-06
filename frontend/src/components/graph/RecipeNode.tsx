@@ -3,6 +3,7 @@ import { Handle, Position } from '@xyflow/react';
 import type { ProductionNode } from '../../types/solver';
 import { formatRate, formatPower, formatCount } from '../../utils/formatting';
 import { useFactoryStore } from '../../stores/useFactoryStore';
+import { Tooltip } from '../Tooltip';
 
 /**
  * Clock speed is a display-only override — it shows how many machines would
@@ -128,12 +129,14 @@ export function RecipeNode({ data }: { data: ProductionNode }) {
           </div>
 
           {/* Power readout */}
-          <div className="mt-2 pt-1.5 border-t border-satisfactory-border/30 flex items-center justify-between">
-            <span className="text-[9px] text-satisfactory-muted uppercase tracking-wider">PWR</span>
+          <Tooltip text="Power draw for this production step. Scales nonlinearly with clock speed (exponent ~1.32).">
+            <div className="mt-2 pt-1.5 border-t border-satisfactory-border/30 flex items-center justify-between">
+              <span className="text-[9px] text-satisfactory-muted uppercase tracking-wider">PWR</span>
             <span className={`text-[10px] ${hasOverride ? 'text-satisfactory-orange' : 'text-satisfactory-orange/80'}`}>
               {formatPower(power)}
             </span>
           </div>
+          </Tooltip>
 
           {/* Panel latch / expand toggle */}
           <button

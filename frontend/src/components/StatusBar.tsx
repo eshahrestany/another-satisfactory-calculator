@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useFactoryStore } from '../stores/useFactoryStore';
 import { formatPower } from '../utils/formatting';
+import { Tooltip } from './Tooltip';
 
 export function StatusBar() {
   const solveResult = useFactoryStore((s) => s.solveResult);
@@ -25,7 +26,9 @@ export function StatusBar() {
   return (
     <div className="bg-satisfactory-dark border-t border-satisfactory-border/50 px-3 py-1 flex items-center gap-4 text-[10px] text-satisfactory-muted select-none flex-shrink-0">
       {/* FICSIT branding */}
-      <span className="text-satisfactory-orange/50 tracking-[0.3em] uppercase font-industrial">FICSIT</span>
+      <Tooltip text="FICSIT Inc. — Pioneering resource acquisition on behalf of valued shareholders." side="top">
+        <span className="text-satisfactory-orange/50 tracking-[0.3em] uppercase font-industrial">FICSIT</span>
+      </Tooltip>
 
       <div className="w-px h-3 bg-satisfactory-border/30" />
 
@@ -59,7 +62,9 @@ export function StatusBar() {
       <div className="w-px h-3 bg-satisfactory-border/30" />
 
       {/* Uptime */}
-      <span className="tabular-nums text-satisfactory-text/60">{hours}:{mins}:{secs}</span>
+      <Tooltip text="Session uptime. ADA is always watching. Your productivity metrics have been forwarded to management." side="top">
+        <span className="tabular-nums text-satisfactory-text/60">{hours}:{mins}:{secs}</span>
+      </Tooltip>
     </div>
   );
 }

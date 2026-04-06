@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { useFactoryStore } from '../../stores/useFactoryStore';
 import { useToastStore } from '../../stores/useToastStore';
 import { PromptDialog, ConfirmDialog } from '../Modal';
+import { Tooltip } from '../Tooltip';
 import type { FactoryMeta } from '../../types/factory';
 import {
   listFactories,
@@ -21,9 +22,12 @@ export function SaveLoadPanel() {
 
   const factoryId = useFactoryStore((s) => s.factoryId);
   const factoryName = useFactoryStore((s) => s.factoryName);
+  const mode = useFactoryStore((s) => s.mode);
   const targets = useFactoryStore((s) => s.targets);
+  const providedInputs = useFactoryStore((s) => s.providedInputs);
   const allowedRecipes = useFactoryStore((s) => s.allowedRecipes);
   const settings = useFactoryStore((s) => s.settings);
+  const powerConfig = useFactoryStore((s) => s.powerConfig);
   const loadFactory = useFactoryStore((s) => s.loadFactory);
   const setFactoryName = useFactoryStore((s) => s.setFactoryName);
   const solve = useFactoryStore((s) => s.solve);
@@ -49,7 +53,7 @@ export function SaveLoadPanel() {
       // Update existing — no prompt needed
       setLoading(true);
       try {
-        const config = { targets, allowed_recipes: allowedRecipes, settings };
+        const config = { targets, provided_inputs: providedInputs, allowed_recipes: allowedRecipes, settings, mode, power_config: powerConfig ?? undefined };
         await updateFactory(factoryId, factoryName, config);
         toast('success', `Factory "${factoryName}" updated`);
         await refreshList();
@@ -68,7 +72,7 @@ export function SaveLoadPanel() {
     setShowNamePrompt(false);
     setLoading(true);
     try {
-      const config = { targets, allowed_recipes: allowedRecipes, settings };
+      const config = { targets, provided_inputs: providedInputs, allowed_recipes: allowedRecipes, settings, mode, power_config: powerConfig ?? undefined };
       const saved = await createFactory(name, config);
       useFactoryStore.getState().setFactoryId(saved.id);
       setFactoryName(saved.name);
@@ -79,7 +83,7 @@ export function SaveLoadPanel() {
     } finally {
       setLoading(false);
     }
-  }, [targets, allowedRecipes, settings, setFactoryName, toast]);
+  }, [targets, providedInputs, allowedRecipes, settings, mode, powerConfig, setFactoryName, toast]);
 
   const handleLoad = async (id: string) => {
     setLoading(true);
@@ -89,8 +93,11 @@ export function SaveLoadPanel() {
         factory.id,
         factory.name,
         factory.config.targets,
+        factory.config.provided_inputs ?? [],
         factory.config.allowed_recipes,
-        factory.config.settings
+        factory.config.settings,
+        factory.config.mode,
+        factory.config.power_config
       );
       toast('info', `Loaded "${factory.name}"`);
       await solve();
@@ -117,13 +124,15 @@ export function SaveLoadPanel() {
 
   return (
     <div>
-      <h3 className="text-satisfactory-orange font-industrial font-bold text-xs mb-2 uppercase tracking-[0.2em] flex items-center gap-2">
-        <span className="text-satisfactory-muted">{'>'}</span> Factories
-      </h3>
+      <Tooltip text="Factory configuration storage. Data persists between sessions. FICSIT is not responsible for lost saves. Or anything, really." side="right">
+        <h3 className="text-satisfactory-orange font-industrial font-bold text-xs mb-2 uppercase tracking-[0.2em] flex items-center gap-2">
+          <span className="text-satisfactory-muted">{'>'}</span> Factories
+        </h3>
+      </Tooltip>
 
       <button
         onClick={handleSave}
-        disabled={loading || targets.length === 0}
+        disabled={loading || (mode === 'production' ? targets.length === 0 : !powerConfig)}
         className="w-full bg-satisfactory-orange text-satisfactory-darker font-industrial font-bold text-xs py-1.5 uppercase tracking-wider disabled:opacity-40 mb-2 transition-all hover:shadow-glow-orange active:translate-y-px"
         style={{ clipPath: 'polygon(0 0, calc(100% - 4px) 0, 100% 4px, 100% 100%, 4px 100%, 0 calc(100% - 4px))' }}
       >

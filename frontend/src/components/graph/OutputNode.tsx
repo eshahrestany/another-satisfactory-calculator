@@ -1,6 +1,7 @@
 import { Handle, Position } from '@xyflow/react';
 import type { ProductionNode } from '../../types/solver';
 import { formatRate } from '../../utils/formatting';
+import { Tooltip } from '../Tooltip';
 
 export function OutputNode({ data }: { data: ProductionNode }) {
   return (
@@ -18,12 +19,14 @@ export function OutputNode({ data }: { data: ProductionNode }) {
               {data.item_name}
             </span>
           </div>
-          <div className="industrial-inset px-2 py-1 flex items-center justify-between">
-            <span className="text-[9px] text-satisfactory-muted uppercase">Demand</span>
-            <span className="text-xs text-satisfactory-orange font-bold">
-              {formatRate(data.inputs[0]?.rate_per_minute ?? 0)}/min
-            </span>
-          </div>
+          <Tooltip text="Required output rate. Failure to meet production quotas will be noted in your file.">
+            <div className="industrial-inset px-2 py-1 flex items-center justify-between">
+              <span className="text-[9px] text-satisfactory-muted uppercase">Demand</span>
+              <span className="text-xs text-satisfactory-orange font-bold">
+                {formatRate(data.inputs[0]?.rate_per_minute ?? 0)}/min
+              </span>
+            </div>
+          </Tooltip>
         </div>
 
         {/* Rivets */}
