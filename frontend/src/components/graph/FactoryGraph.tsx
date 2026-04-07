@@ -228,9 +228,10 @@ export function FactoryGraph() {
         nodesConnectable={false}
         fitView
         proOptions={{ hideAttribution: true }}
+        minZoom={0.01}
       >
         <Background color="#2a2a44" gap={20} size={1} />
-        <Controls />
+        <Controls/>
       </ReactFlow>
     </div>
   );
