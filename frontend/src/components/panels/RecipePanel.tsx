@@ -77,31 +77,31 @@ function AlternateRecipeDropdown({
 
   return (
     <div>
-      <button
-        onClick={() => setOpen(!open)}
-        className="w-full flex items-center justify-between group"
-      >
-        <h3 className={`font-industrial font-bold text-xs uppercase tracking-[0.2em] flex items-center gap-2 transition-colors ${
-          isActive ? 'text-satisfactory-orange' : 'text-satisfactory-muted'
-        }`}>
-          <span className={isActive ? 'text-satisfactory-orange' : 'text-satisfactory-border'}>{'>'}</span>
-          Alternate Recipes
-          {isActive && (
-            <span className="text-[9px] bg-satisfactory-orange/20 text-satisfactory-orange border border-satisfactory-orange/30 px-1.5 py-0.5 rounded-sm font-bold">
-              {enabledCount}
-            </span>
-          )}
-        </h3>
-        <span className={`text-[10px] transition-transform ${open ? 'rotate-180' : ''} ${
-          isActive ? 'text-satisfactory-orange' : 'text-satisfactory-muted'
-        }`}>
-          &#x25BC;
-        </span>
-      </button>
+      <Tooltip text="Recipes recovered from crashed hard drives. Quality varies. FICSIT assumes no liability for production inefficiencies." side="right">
+        <button
+          onClick={() => setOpen(!open)}
+          className="w-full flex items-center justify-between group"
+        >
+          <h3 className={`font-industrial font-bold text-xs uppercase tracking-[0.2em] flex items-center gap-2 transition-colors ${
+            isActive ? 'text-satisfactory-orange' : 'text-satisfactory-muted'
+          }`}>
+            <span className={isActive ? 'text-satisfactory-orange' : 'text-satisfactory-border'}>{'>'}</span>
+            Alternate Recipes
+            {isActive && (
+              <span className="text-[9px] bg-satisfactory-orange/20 text-satisfactory-orange border border-satisfactory-orange/30 px-1.5 py-0.5 rounded-sm font-bold">
+                {enabledCount}
+              </span>
+            )}
+          </h3>
+          <span className={`text-[10px] ml-2 transition-transform ${open ? 'rotate-180' : ''} ${
+            isActive ? 'text-satisfactory-orange' : 'text-satisfactory-muted'
+          }`}>
+            &#x25BC;
+          </span>
+        </button>
+      </Tooltip>
       {!open && (
-        <Tooltip text="Recipes recovered from crashed hard drives. Quality varies. FICSIT assumes no liability for production inefficiencies." side="right">
-          <div className="text-[9px] text-satisfactory-muted/40 mt-0.5 italic">Unlock via hard drives</div>
-        </Tooltip>
+        <div className="text-[9px] text-satisfactory-muted/40 mt-0.5 italic">Unlock via hard drives</div>
       )}
 
       {open && (
@@ -200,31 +200,31 @@ function DefaultRecipeDropdown({
 
   return (
     <div>
-      <button
-        onClick={() => setOpen(!open)}
-        className="w-full flex items-center justify-between group"
-      >
-        <h3 className={`font-industrial font-bold text-xs uppercase tracking-[0.2em] flex items-center gap-2 transition-colors ${
-          isActive ? 'text-satisfactory-orange' : 'text-satisfactory-muted'
-        }`}>
-          <span className={isActive ? 'text-satisfactory-orange' : 'text-satisfactory-border'}>{'>'}</span>
-          Default Recipes
-          {isActive && (
-            <span className="text-[9px] bg-satisfactory-orange/20 text-satisfactory-orange border border-satisfactory-orange/30 px-1.5 py-0.5 rounded-sm font-bold">
-              {disabledCount} off
-            </span>
-          )}
-        </h3>
-        <span className={`text-[10px] transition-transform ${open ? 'rotate-180' : ''} ${
-          isActive ? 'text-satisfactory-orange' : 'text-satisfactory-muted'
-        }`}>
-          &#x25BC;
-        </span>
-      </button>
+      <Tooltip text="Standard FICSIT-approved production methods. Disabling recipes may cause solver failures. You have been warned." side="right">
+        <button
+          onClick={() => setOpen(!open)}
+          className="w-full flex items-center justify-between group"
+        >
+          <h3 className={`font-industrial font-bold text-xs uppercase tracking-[0.2em] flex items-center gap-2 transition-colors ${
+            isActive ? 'text-satisfactory-orange' : 'text-satisfactory-muted'
+          }`}>
+            <span className={isActive ? 'text-satisfactory-orange' : 'text-satisfactory-border'}>{'>'}</span>
+            Default Recipes
+            {isActive && (
+              <span className="text-[9px] bg-satisfactory-orange/20 text-satisfactory-orange border border-satisfactory-orange/30 px-1.5 py-0.5 rounded-sm font-bold">
+                {disabledCount} off
+              </span>
+            )}
+          </h3>
+          <span className={`text-[10px] ml-2 transition-transform ${open ? 'rotate-180' : ''} ${
+            isActive ? 'text-satisfactory-orange' : 'text-satisfactory-muted'
+          }`}>
+            &#x25BC;
+          </span>
+        </button>
+      </Tooltip>
       {!open && (
-        <Tooltip text="Standard FICSIT-approved production methods. Disabling recipes may cause solver failures. You have been warned." side="right">
-          <div className="text-[9px] text-satisfactory-muted/40 mt-0.5 italic">All enabled by default</div>
-        </Tooltip>
+        <div className="text-[9px] text-satisfactory-muted/40 mt-0.5 italic">All enabled by default</div>
       )}
 
       {open && (

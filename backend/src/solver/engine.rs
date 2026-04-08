@@ -34,6 +34,32 @@ struct RecipeRates {
     consumption: HashMap<String, f64>,
 }
 
+/// Power draw per single instance of a recipe (MW), under the current settings.
+/// Returns 0.0 for virtual generator recipes (they produce power, not consume it).
+///
+/// Used by both the `MinimizePower` objective and the graph builder, so the
+/// two stay in lock-step.
+fn recipe_power_coefficient(
+    recipe: &crate::models::game_data::Recipe,
+    building: Option<&crate::models::game_data::Building>,
+    settings: &GameSettings,
+    somersloops: &HashMap<String, bool>,
+) -> f64 {
+    if recipe.id.starts_with("__gen_") {
+        return 0.0;
+    }
+    let base_power = if recipe.is_variable_power {
+        (recipe.min_power + recipe.max_power) / 2.0
+    } else {
+        building.map(|b| b.power_consumption_mw).unwrap_or(0.0)
+    };
+    let clock_fraction = settings.clock_speed / 100.0;
+    let clock_power_factor = clock_fraction.powf(1.321928);
+    let sloop = somersloops.get(&recipe.id).copied().unwrap_or(false);
+    let sloop_power_mult = if sloop { 4.0 } else { 1.0 };
+    base_power * clock_power_factor * settings.power_consumption_multiplier * sloop_power_mult
+}
+
 /// Build virtual generator recipes for power plant mode.
 /// Each generator+fuel combo becomes a recipe that consumes fuel (+ water) and produces __power_mw (+ waste).
 fn build_virtual_generator_recipes(
@@ -139,6 +165,18 @@ pub fn solve(game_data: &GameData, request: &SolveRequest) -> Result<SolveRespon
         return Err("No production targets specified".to_string());
     }
 
+    tracing::debug!("=== SOLVER START ===");
+    tracing::debug!(
+        "Targets: {:?}",
+        request.targets.iter().map(|t| format!("{} @ {}/min", t.item_id, t.rate_per_minute)).collect::<Vec<_>>()
+    );
+    tracing::debug!("Power mode: {}", is_power_mode);
+    tracing::debug!(
+        "Allowed recipes override: {} entries, Disabled: {} entries",
+        request.allowed_recipes.len(),
+        request.disabled_recipes.len()
+    );
+
     // Build lookup maps
     let item_map: HashMap<&str, &crate::models::game_data::Item> =
         game_data.items.iter().map(|i| (i.id.as_str(), i)).collect();
@@ -171,6 +209,13 @@ pub fn solve(game_data: &GameData, request: &SolveRequest) -> Result<SolveRespon
         allowed_recipes.push(vr);
     }
 
+    tracing::debug!(
+        "Allowed recipes: {} total ({} default + {} virtual generator)",
+        allowed_recipes.len(),
+        allowed_recipes.len() - virtual_recipes.len(),
+        virtual_recipes.len()
+    );
+
     // Identify all raw resources
     let resource_items: Vec<&str> = game_data
         .items
@@ -179,11 +224,61 @@ pub fn solve(game_data: &GameData, request: &SolveRequest) -> Result<SolveRespon
         .map(|i| i.id.as_str())
         .collect();
 
+    tracing::debug!("Raw resource items available: {}", resource_items.len());
+
+    // Pre-prune: iteratively remove recipes that require items nothing can produce.
+    //
+    // Without this, those recipes introduce degenerate LP constraints of the form
+    // `0 - rate*x >= 0` (no producers, no target) which force recipe vars to 0.
+    // minilp's simplex is sensitive to the ordering of such constraints and
+    // non-deterministically reports Infeasible even when a valid solution exists
+    // via a completely different recipe path. Removing these dead recipes before
+    // building the LP eliminates the degeneracy entirely.
+    {
+        let resource_set: std::collections::HashSet<&str> = resource_items.iter().copied().collect();
+        let input_set: std::collections::HashSet<&str> =
+            request.provided_inputs.iter().map(|p| p.item_id.as_str()).collect();
+
+        loop {
+            // Build the set of items any current recipe can produce, plus raw resources and inputs.
+            let mut produceable: std::collections::HashSet<&str> = resource_set.clone();
+            produceable.extend(input_set.iter().copied());
+            // Virtual generator recipes produce __power_mw which is fine to leave in.
+            for r in &allowed_recipes {
+                for product in &r.products {
+                    produceable.insert(product.item_id.as_str());
+                }
+            }
+
+            let before = allowed_recipes.len();
+            allowed_recipes.retain(|recipe| {
+                recipe.ingredients.iter().all(|ing| produceable.contains(ing.item_id.as_str()))
+            });
+
+            let pruned = before - allowed_recipes.len();
+            if pruned == 0 {
+                break;
+            }
+            tracing::debug!(
+                "Pre-pruned {} recipe(s) with unproduceable ingredients ({} remain)",
+                pruned,
+                allowed_recipes.len()
+            );
+        }
+        tracing::debug!("After pruning: {} recipes in LP", allowed_recipes.len());
+    }
+
     // Precompute per-minute rates for each recipe
     // Clock speed scales per-machine throughput: a machine at 50% produces half as much,
     // so the solver will need proportionally more machines.
     let cost_mult = request.settings.cost_multiplier;
     let clock_fraction = request.settings.clock_speed / 100.0;
+    tracing::debug!(
+        "Settings: cost_mult={}, clock_speed={}%, power_mult={}",
+        cost_mult,
+        request.settings.clock_speed,
+        request.settings.power_consumption_multiplier
+    );
     let recipe_rates: Vec<RecipeRates> = allowed_recipes
         .iter()
         .map(|recipe| {
@@ -219,6 +314,23 @@ pub fn solve(game_data: &GameData, request: &SolveRequest) -> Result<SolveRespon
         })
         .collect();
 
+    // Log per-recipe rates for debugging
+    for (i, recipe) in allowed_recipes.iter().enumerate() {
+        let rates = &recipe_rates[i];
+        let inputs: Vec<String> = rates.consumption.iter()
+            .map(|(id, r)| format!("{:.3} {}", r, id))
+            .collect();
+        let outputs: Vec<String> = rates.production.iter()
+            .map(|(id, r)| format!("{:.3} {}", r, id))
+            .collect();
+        tracing::debug!(
+            "  Recipe [{}] \"{}\": inputs=[{}] → outputs=[{}]",
+            recipe.id, recipe.name,
+            inputs.join(", "),
+            outputs.join(", ")
+        );
+    }
+
     // Collect all items involved
     let mut all_items: Vec<String> = Vec::new();
     for rates in &recipe_rates {
@@ -239,6 +351,8 @@ pub fn solve(game_data: &GameData, request: &SolveRequest) -> Result<SolveRespon
         }
     }
 
+    tracing::debug!("LP items (balance constraints): {} total", all_items.len());
+
     // Build LP problem
     let mut problem = good_lp::ProblemVariables::new();
 
@@ -248,6 +362,8 @@ pub fn solve(game_data: &GameData, request: &SolveRequest) -> Result<SolveRespon
         .map(|_| problem.add(variable().min(0.0)))
         .collect();
 
+    tracing::debug!("LP variables: {} recipe vars", recipe_vars.len());
+
     // Build resource constraint lookup
     let constraint_map: HashMap<&str, f64> = request
         .resource_constraints
@@ -255,11 +371,16 @@ pub fn solve(game_data: &GameData, request: &SolveRequest) -> Result<SolveRespon
         .map(|c| (c.item_id.as_str(), c.max_rate_per_minute))
         .collect();
 
+    if !constraint_map.is_empty() {
+        tracing::debug!("Resource constraints: {:?}", constraint_map);
+    }
+
     // Extraction variables for raw resources
     let mut extract_vars: HashMap<String, good_lp::Variable> = HashMap::new();
     for &res_id in &resource_items {
         if all_items.contains(&res_id.to_string()) {
             let var = if let Some(&max_rate) = constraint_map.get(res_id) {
+                tracing::debug!("  Resource {} capped at {}/min", res_id, max_rate);
                 problem.add(variable().min(0.0).max(max_rate))
             } else {
                 problem.add(variable().min(0.0))
@@ -267,6 +388,8 @@ pub fn solve(game_data: &GameData, request: &SolveRequest) -> Result<SolveRespon
             extract_vars.insert(res_id.to_string(), var);
         }
     }
+
+    tracing::debug!("LP variables: {} extraction vars for resources in use", extract_vars.len());
 
     // Provided input variables: fixed-supply items from external sources.
     // These add to item balance but are NOT part of the minimization objective.
@@ -276,13 +399,83 @@ pub fn solve(game_data: &GameData, request: &SolveRequest) -> Result<SolveRespon
             all_items.push(input.item_id.clone());
         }
         let var = problem.add(variable().min(0.0).max(input.rate_per_minute));
+        tracing::debug!("  Provided input {} max {}/min", input.item_id, input.rate_per_minute);
         input_vars.insert(input.item_id.clone(), var);
     }
 
-    // Objective: minimize total raw resource extraction
-    let objective: Expression = extract_vars.values().fold(Expression::from(0.0), |acc, &var| {
-        acc + var
-    });
+    // Objective: depends on request.optimization_goal.
+    let sum_all_extractions = |vars: &HashMap<String, good_lp::Variable>| -> Expression {
+        vars.values()
+            .fold(Expression::from(0.0), |acc, &v| acc + v)
+    };
+
+    let objective: Expression = match request.optimization_goal {
+        OptimizationGoal::MinimizeResources => {
+            tracing::debug!("Objective: minimize total raw resource extraction");
+            sum_all_extractions(&extract_vars)
+        }
+        OptimizationGoal::MinimizeBuildings => {
+            tracing::debug!("Objective: minimize total buildings");
+            let mut expr = Expression::from(0.0);
+            for (i, recipe) in allowed_recipes.iter().enumerate() {
+                if recipe.id.starts_with("__gen_") {
+                    continue;
+                }
+                expr = expr + recipe_vars[i];
+            }
+            expr
+        }
+        OptimizationGoal::MinimizePower => {
+            tracing::debug!("Objective: minimize total factory power (MW)");
+            let mut expr = Expression::from(0.0);
+            for (i, recipe) in allowed_recipes.iter().enumerate() {
+                let building = building_map.get(recipe.building_id.as_str()).copied();
+                let coeff = recipe_power_coefficient(
+                    recipe,
+                    building,
+                    &request.settings,
+                    &request.somersloops,
+                );
+                if coeff > 0.0 {
+                    expr = expr + coeff * recipe_vars[i];
+                }
+            }
+            expr
+        }
+        OptimizationGoal::MinimizeSpecificResources => {
+            let selected: std::collections::HashSet<&str> = request
+                .optimization_target_resources
+                .iter()
+                .map(|s| s.as_str())
+                .collect();
+            let matched: Vec<good_lp::Variable> = extract_vars
+                .iter()
+                .filter(|(id, _)| selected.contains(id.as_str()))
+                .map(|(_, v)| *v)
+                .collect();
+            if matched.is_empty() {
+                tracing::warn!(
+                    "Objective: MinimizeSpecificResources requested but {} selected item(s) matched 0 extraction variables — falling back to MinimizeResources",
+                    request.optimization_target_resources.len()
+                );
+                sum_all_extractions(&extract_vars)
+            } else {
+                tracing::debug!(
+                    "Objective: minimize specific resources ({} of {} selected items matched): {:?}",
+                    matched.len(),
+                    request.optimization_target_resources.len(),
+                    extract_vars
+                        .iter()
+                        .filter(|(id, _)| selected.contains(id.as_str()))
+                        .map(|(id, _)| id.as_str())
+                        .collect::<Vec<_>>()
+                );
+                matched
+                    .iter()
+                    .fold(Expression::from(0.0), |acc, &v| acc + v)
+            }
+        }
+    };
 
     let mut solver = problem.minimise(objective).using(default_solver);
 
@@ -302,30 +495,78 @@ pub fn solve(game_data: &GameData, request: &SolveRequest) -> Result<SolveRespon
         .map(|t| (t.item_id.as_str(), t.rate_per_minute))
         .collect();
 
+    tracing::debug!(
+        "Effective targets: {:?}",
+        effective_targets.iter().map(|t| format!("{} @ {}/min", t.item_id, t.rate_per_minute)).collect::<Vec<_>>()
+    );
+
+    // Track which items have at least one recipe that can produce them (for infeasibility diagnosis)
+    let mut producible_items: std::collections::HashSet<String> = std::collections::HashSet::new();
+    for rates in &recipe_rates {
+        for key in rates.production.keys() {
+            producible_items.insert(key.clone());
+        }
+    }
+    for key in extract_vars.keys() {
+        producible_items.insert(key.clone());
+    }
+    for key in input_vars.keys() {
+        producible_items.insert(key.clone());
+    }
+
+    // Warn about targets that nothing can produce
+    for target in &effective_targets {
+        if !producible_items.contains(&target.item_id) {
+            tracing::warn!(
+                "  *** TARGET ITEM '{}' has NO recipe or resource that can produce it — LP will be infeasible ***",
+                target.item_id
+            );
+        }
+    }
+
+    // Warn about items that are consumed but never produced
+    for item_id in &all_items {
+        let is_consumed = recipe_rates.iter().any(|r| r.consumption.contains_key(item_id));
+        let is_produced = producible_items.contains(item_id);
+        if is_consumed && !is_produced {
+            tracing::warn!(
+                "  *** ITEM '{}' is consumed by at least one recipe but NOTHING produces it — LP may be infeasible ***",
+                item_id
+            );
+        }
+    }
+
+    let mut constraint_count = 0;
     for item_id in &all_items {
         let mut balance = Expression::from(0.0);
 
         // Add production from recipes
+        let mut producers: Vec<String> = Vec::new();
         for (i, rates) in recipe_rates.iter().enumerate() {
             if let Some(&rate) = rates.production.get(item_id) {
                 balance = balance + rate * recipe_vars[i];
+                producers.push(format!("{:.3}/min from '{}'", rate, allowed_recipes[i].name));
             }
         }
 
         // Add extraction for raw resources
         if let Some(&extract_var) = extract_vars.get(item_id) {
             balance = balance + extract_var;
+            producers.push("(extraction var)".to_string());
         }
 
         // Add provided inputs
         if let Some(&input_var) = input_vars.get(item_id) {
             balance = balance + input_var;
+            producers.push("(provided input)".to_string());
         }
 
         // Subtract consumption by recipes
+        let mut consumers: Vec<String> = Vec::new();
         for (i, rates) in recipe_rates.iter().enumerate() {
             if let Some(&rate) = rates.consumption.get(item_id) {
                 balance = balance - rate * recipe_vars[i];
+                consumers.push(format!("{:.3}/min by '{}'", rate, allowed_recipes[i].name));
             }
         }
 
@@ -347,19 +588,68 @@ pub fn solve(game_data: &GameData, request: &SolveRequest) -> Result<SolveRespon
             false
         };
 
+        if target_rate > 0.0 || force_zero {
+            tracing::debug!(
+                "  Constraint for '{}': target={}/min, producers=[{}], consumers=[{}]{}",
+                item_id,
+                target_rate,
+                producers.join("; "),
+                consumers.join("; "),
+                if force_zero { " [FORCE=0]" } else { "" }
+            );
+        } else {
+            tracing::debug!(
+                "  Balance constraint '{}': {} producer(s), {} consumer(s)",
+                item_id,
+                producers.len(),
+                consumers.len()
+            );
+        }
+
         if force_zero {
             // balance == 0: all waste produced must be consumed
             solver = solver.with(constraint!(balance.clone() >= target_rate));
             solver = solver.with(constraint!(balance <= 0.0));
+            constraint_count += 2;
         } else {
             solver = solver.with(constraint!(balance >= target_rate));
+            constraint_count += 1;
         }
     }
 
+    tracing::debug!("LP built: {} constraints total", constraint_count);
+
     // Solve
+    tracing::debug!("Calling LP solver...");
     let solution = solver
         .solve()
-        .map_err(|e| format!("Solver failed: {}. Check that the requested items can be produced with the allowed recipes.", e))?;
+        .map_err(|e| {
+            tracing::error!(
+                "LP solver returned error: {}. Targets={:?}, allowed_recipes={}, items_in_lp={}",
+                e,
+                effective_targets.iter().map(|t| format!("{} @ {}/min", t.item_id, t.rate_per_minute)).collect::<Vec<_>>(),
+                allowed_recipes.len(),
+                all_items.len()
+            );
+            format!("Solver failed: {}. Check that the requested items can be produced with the allowed recipes.", e)
+        })?;
+
+    tracing::debug!("LP solver succeeded. Building response...");
+
+    // Log active recipe variables
+    let epsilon_log = 0.001;
+    for (i, recipe) in allowed_recipes.iter().enumerate() {
+        let val = solution.value(recipe_vars[i]);
+        if val >= epsilon_log {
+            tracing::debug!("  Active recipe '{}' ({}): {:.4} instances", recipe.name, recipe.id, val);
+        }
+    }
+    for (item_id, &var) in &extract_vars {
+        let val = solution.value(var);
+        if val >= epsilon_log {
+            tracing::debug!("  Extracted '{}': {:.4}/min", item_id, val);
+        }
+    }
 
     // Build response graph
     build_graph(
@@ -425,23 +715,12 @@ fn build_graph(
 
         let is_virtual_gen = recipe.id.starts_with("__gen_");
 
-        let building = building_map.get(recipe.building_id.as_str());
-        let power;
-        if is_virtual_gen {
-            // Virtual generator recipes don't consume power — they produce it
-            power = 0.0;
+        let building = building_map.get(recipe.building_id.as_str()).copied();
+        let power = if is_virtual_gen {
+            0.0
         } else {
-            let base_power = if recipe.is_variable_power {
-                (recipe.min_power + recipe.max_power) / 2.0
-            } else {
-                building.map(|b| b.power_consumption_mw).unwrap_or(0.0)
-            };
-            let clock_fraction = settings.clock_speed / 100.0;
-            let clock_power_factor = clock_fraction.powf(1.321928);
-            let sloop = somersloops.get(&recipe.id).copied().unwrap_or(false);
-            let sloop_power_mult = if sloop { 4.0 } else { 1.0 };
-            power = count * base_power * clock_power_factor * settings.power_consumption_multiplier * sloop_power_mult;
-        }
+            count * recipe_power_coefficient(recipe, building, settings, somersloops)
+        };
 
         let node_id = if is_virtual_gen {
             format!("generator-{}", recipe.id)

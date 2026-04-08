@@ -6,6 +6,20 @@ pub struct ResourceConstraint {
     pub max_rate_per_minute: f64,
 }
 
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, Default, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum OptimizationGoal {
+    /// Minimize total raw resource extraction (current default).
+    #[default]
+    MinimizeResources,
+    /// Minimize the total number of factory buildings.
+    MinimizeBuildings,
+    /// Minimize total factory power consumption.
+    MinimizePower,
+    /// Minimize extraction of a user-selected subset of raw resources.
+    MinimizeSpecificResources,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SolveRequest {
     pub targets: Vec<ProductionTarget>,
@@ -27,6 +41,13 @@ pub struct SolveRequest {
     /// Default recipe IDs to exclude from the solve.
     #[serde(default)]
     pub disabled_recipes: Vec<String>,
+    /// LP objective selector. Defaults to `MinimizeResources` for backwards compat.
+    #[serde(default)]
+    pub optimization_goal: OptimizationGoal,
+    /// Item IDs to minimize when `optimization_goal` is `MinimizeSpecificResources`.
+    /// If empty or no matches, the solver falls back to minimizing all resources.
+    #[serde(default)]
+    pub optimization_target_resources: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

@@ -1,5 +1,6 @@
 import { useFactoryStore } from '../stores/useFactoryStore';
 import { Tooltip } from './Tooltip';
+import { FactoryDropdown } from './FactoryDropdown';
 
 export function Toolbar() {
   const factoryName = useFactoryStore((s) => s.factoryName);
@@ -11,13 +12,13 @@ export function Toolbar() {
   const powerConfig = useFactoryStore((s) => s.powerConfig);
 
   return (
-    <div className="relative bg-satisfactory-panel border-b-2 border-satisfactory-border px-4 py-2 flex items-center gap-4 metal-texture">
+    <div className="relative bg-satisfactory-panel border-b-2 border-satisfactory-border px-4 py-2 flex items-center gap-3 metal-texture">
       {/* Caution stripe accent along top */}
       <div className="absolute top-0 left-0 right-0 h-[3px] caution-stripe animate-caution" />
 
       {/* Logo */}
       <Tooltip text="FICSIT Factory Planning Terminal v2.4.1 — Unauthorized use will be reported to HR. HR has been automated." side="bottom">
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-shrink-0">
           <div className="text-satisfactory-orange font-industrial font-bold text-base tracking-[0.25em] uppercase">
             SATISFACTORY
           </div>
@@ -28,24 +29,27 @@ export function Toolbar() {
       </Tooltip>
 
       {/* Separator */}
-      <div className="h-6 w-px bg-satisfactory-border" />
+      <div className="h-6 w-px bg-satisfactory-border flex-shrink-0" />
 
       {/* Factory name input */}
-      <div className="flex items-center gap-2">
-        <Tooltip text="Factory designation code. 'Untitled Factory' has been flagged by FICSIT compliance 47 times this quarter." side="bottom">
-          <span className="text-[10px] text-satisfactory-muted uppercase tracking-wider">ID:</span>
-        </Tooltip>
-        <input
-          type="text"
-          value={factoryName}
-          onChange={(e) => setFactoryName(e.target.value)}
-          className="bg-satisfactory-darker/50 border border-satisfactory-border text-white text-xs px-2 py-1 focus:border-satisfactory-orange outline-none shadow-industrial-inset"
-        />
-      </div>
+      <Tooltip text="Factory designation code. 'Untitled Factory' has been flagged by FICSIT compliance 47 times this quarter." side="bottom">
+        <div className="flex items-center gap-2">
+          <span className="text-[10px] text-satisfactory-muted uppercase tracking-wider flex-shrink-0">ID:</span>
+          <input
+            type="text"
+            value={factoryName}
+            onChange={(e) => setFactoryName(e.target.value)}
+            className="bg-satisfactory-darker/50 border border-satisfactory-border text-white text-xs px-2 py-1 focus:border-satisfactory-orange outline-none shadow-industrial-inset w-36"
+          />
+        </div>
+      </Tooltip>
+
+      {/* Factory save/load controls */}
+      <FactoryDropdown />
 
       <div className="flex-1" />
 
-      {/* Status indicator */}
+      {/* Status indicator + Solve button */}
       {(() => {
         const ready = mode === 'production'
           ? targets.length > 0

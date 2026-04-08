@@ -1,5 +1,6 @@
 import { create } from 'zustand';
-import type { ProductionTarget, ProvidedInput, PowerModeConfig, GameSettings, SolveResponse, ResourceConstraint } from '../types/solver';
+import type { ProductionTarget, ProvidedInput, PowerModeConfig, GameSettings, SolveResponse, ResourceConstraint, OptimizationGoal } from '../types/solver';
+import type { FactoryConfig } from '../types/factory';
 import type { Item, Recipe, Building, Generator } from '../types/gameData';
 import { solveProdution } from '../api/solver';
 import { fetchItems, fetchRecipes, fetchBuildings, fetchGenerators } from '../api/gameData';
@@ -63,6 +64,13 @@ interface FactoryStore {
   toggleDisabledRecipe: (recipeId: string) => void;
   setDisabledRecipes: (recipeIds: string[]) => void;
 
+  // Optimization goal
+  optimizationGoal: OptimizationGoal;
+  optimizationTargetResources: string[];
+  setOptimizationGoal: (goal: OptimizationGoal) => void;
+  toggleOptimizationTargetResource: (itemId: string) => void;
+  setOptimizationTargetResources: (itemIds: string[]) => void;
+
   // Actions
   setFactoryId: (id: string | null) => void;
   setFactoryName: (name: string) => void;
@@ -79,7 +87,7 @@ interface FactoryStore {
   setAllowedRecipes: (recipeIds: string[]) => void;
   updateSettings: (settings: Partial<GameSettings>) => void;
   solve: () => Promise<void>;
-  loadFactory: (id: string, name: string, targets: ProductionTarget[], providedInputs: ProvidedInput[], allowedRecipes: string[], settings: GameSettings, mode?: 'production' | 'power', powerConfig?: PowerModeConfig | null) => void;
+  loadFactory: (id: string, name: string, config: FactoryConfig) => void;
   clearFactory: () => void;
 }
 
@@ -143,6 +151,20 @@ export const useFactoryStore = create<FactoryStore>((set, get) => ({
       };
     }),
   setDisabledRecipes: (recipeIds) => set({ disabledRecipes: recipeIds }),
+
+  optimizationGoal: 'minimize_resources',
+  optimizationTargetResources: [],
+  setOptimizationGoal: (goal) => set({ optimizationGoal: goal }),
+  toggleOptimizationTargetResource: (itemId) =>
+    set((state) => {
+      const has = state.optimizationTargetResources.includes(itemId);
+      return {
+        optimizationTargetResources: has
+          ? state.optimizationTargetResources.filter((id) => id !== itemId)
+          : [...state.optimizationTargetResources, itemId],
+      };
+    }),
+  setOptimizationTargetResources: (itemIds) => set({ optimizationTargetResources: itemIds }),
 
   nodeOverrides: {},
   setNodeOverride: (nodeId, partial) =>
@@ -236,7 +258,7 @@ export const useFactoryStore = create<FactoryStore>((set, get) => ({
     })),
 
   solve: async () => {
-    const { targets, providedInputs, allowedRecipes, settings, nodeOverrides, mode, powerConfig, resourceConstraints, disabledRecipes } = get();
+    const { targets, providedInputs, allowedRecipes, settings, nodeOverrides, mode, powerConfig, resourceConstraints, disabledRecipes, optimizationGoal, optimizationTargetResources } = get();
     if (mode === 'production' && targets.length === 0) return;
     if (mode === 'power' && (!powerConfig || powerConfig.target_mw <= 0)) return;
 
@@ -261,6 +283,10 @@ export const useFactoryStore = create<FactoryStore>((set, get) => ({
         ...(mode === 'power' && powerConfig ? { power_mode: powerConfig } : {}),
         ...(resourceConstraints.length > 0 ? { resource_constraints: resourceConstraints } : {}),
         ...(disabledRecipes.length > 0 ? { disabled_recipes: disabledRecipes } : {}),
+        ...(optimizationGoal !== 'minimize_resources' ? { optimization_goal: optimizationGoal } : {}),
+        ...(optimizationGoal === 'minimize_specific_resources' && optimizationTargetResources.length > 0
+          ? { optimization_target_resources: optimizationTargetResources }
+          : {}),
       });
       set({ solveResult: result, solving: false });
       useToastStore.getState().addToast(
@@ -277,23 +303,26 @@ export const useFactoryStore = create<FactoryStore>((set, get) => ({
     }
   },
 
-  loadFactory: (id, name, targets, providedInputs, allowedRecipes, settings, mode, powerConfig) =>
+  loadFactory: (id, name, config) =>
     set({
       factoryId: id,
       factoryName: name,
-      mode: mode ?? 'production',
-      targets,
-      providedInputs,
-      allowedRecipes,
-      settings,
-      powerConfig: powerConfig ?? null,
+      mode: config.mode ?? 'production',
+      targets: config.targets,
+      providedInputs: config.provided_inputs ?? [],
+      allowedRecipes: config.allowed_recipes,
+      settings: config.settings,
+      powerConfig: config.power_config ?? null,
+      optimizationGoal: config.optimization_goal ?? 'minimize_resources',
+      optimizationTargetResources: config.optimization_target_resources ?? [],
+      resourceConstraints: config.resource_constraints ?? [],
+      disabledRecipes: config.disabled_recipes ?? [],
+      nodeOverrides: config.node_overrides ?? {},
+      inputNodePurities: config.input_node_purities ?? {},
+      defaultMinerLevel: config.default_miner_level ?? 3,
       solveResult: null,
       solveError: null,
       selectedNodeId: null,
-      nodeOverrides: {},
-      inputNodePurities: {},
-      resourceConstraints: [],
-      disabledRecipes: [],
     }),
 
   clearFactory: () => {
@@ -313,6 +342,8 @@ export const useFactoryStore = create<FactoryStore>((set, get) => ({
       inputNodePurities: {},
       resourceConstraints: [],
       disabledRecipes: [],
+      optimizationGoal: 'minimize_resources',
+      optimizationTargetResources: [],
     });
     useToastStore.getState().addToast('info', 'Factory cleared');
   },

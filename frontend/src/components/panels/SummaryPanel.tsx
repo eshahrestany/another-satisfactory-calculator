@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { useFactoryStore } from '../../stores/useFactoryStore';
 import { formatRate, formatPower } from '../../utils/formatting';
 import { Tooltip } from '../Tooltip';
@@ -30,9 +31,11 @@ function getSomersloopSlots(buildingId: string | undefined | null): number {
 }
 
 export function SummaryPanel() {
+  const [collapsed, setCollapsed] = useState(false);
   const solveResult = useFactoryStore((s) => s.solveResult);
   const nodeOverrides = useFactoryStore((s) => s.nodeOverrides);
   const globalClockSpeed = useFactoryStore((s) => s.settings.clock_speed);
+  const powerMultiplier = useFactoryStore((s) => s.settings.power_consumption_multiplier);
   const defaultMinerLevel = useFactoryStore((s) => s.defaultMinerLevel);
   const inputNodePurities = useFactoryStore((s) => s.inputNodePurities);
 
@@ -102,17 +105,17 @@ export function SummaryPanel() {
     if (node.item_id === WATER_ITEM_ID) {
       const count = getExtractorCount(rate);
       totalWaterExtractors += count;
-      waterExtractorPower += getExtractorPower(count);
+      waterExtractorPower += getExtractorPower(count) * powerMultiplier;
     } else if (node.item_id === OIL_ITEM_ID) {
       const purity = inputNodePurities[node.id] ?? 'normal';
       const count = getOilExtractorCount(rate, purity);
       totalOilExtractors += count;
-      oilExtractorPower += getOilExtractorPower(count);
+      oilExtractorPower += getOilExtractorPower(count) * powerMultiplier;
     } else {
       const purity = inputNodePurities[node.id] ?? 'normal';
       const count = getMinerCount(rate, defaultMinerLevel, purity);
       totalMiners += count;
-      minerPower += getMinerPower(count, defaultMinerLevel);
+      minerPower += getMinerPower(count, defaultMinerLevel) * powerMultiplier;
     }
   }
 
@@ -156,8 +159,26 @@ export function SummaryPanel() {
   }
 
   return (
-    <div className="bg-satisfactory-panel border-t-2 border-satisfactory-border p-3 metal-texture animate-stamp">
-      <div className="flex gap-6 text-xs">
+    <div className="bg-satisfactory-panel border-t-2 border-satisfactory-border metal-texture animate-stamp">
+      {/* Collapse toggle header */}
+      <button
+        onClick={() => setCollapsed((v) => !v)}
+        className="w-full flex items-center justify-between px-3 py-1.5 hover:bg-satisfactory-border/10 transition-colors group"
+      >
+        <span className="text-[9px] font-industrial uppercase tracking-[0.2em] text-satisfactory-muted flex items-center gap-2">
+          <span className="text-satisfactory-orange">&#x2630;</span> Summary
+          {collapsed && (
+            <span className="text-satisfactory-muted/50 italic normal-case tracking-normal text-[9px]">
+              — {formatPower(totalPower)} · {totalBuildingsPhysical} buildings
+            </span>
+          )}
+        </span>
+        <span className={`text-[10px] text-satisfactory-muted transition-transform group-hover:text-satisfactory-orange ${collapsed ? 'rotate-180' : ''}`}>
+          &#x25BC;
+        </span>
+      </button>
+      {!collapsed && (
+      <div className="flex gap-6 text-xs px-3 pb-3">
         {/* Power readout */}
         <div className="flex-shrink-0">
           <Tooltip text="Total power consumption including miners, extractors, and production buildings. Plan your grid accordingly.">
@@ -269,6 +290,7 @@ export function SummaryPanel() {
           </>
         )}
       </div>
+      )}
     </div>
   );
 }

@@ -28,6 +28,8 @@ export function SaveLoadPanel() {
   const allowedRecipes = useFactoryStore((s) => s.allowedRecipes);
   const settings = useFactoryStore((s) => s.settings);
   const powerConfig = useFactoryStore((s) => s.powerConfig);
+  const optimizationGoal = useFactoryStore((s) => s.optimizationGoal);
+  const optimizationTargetResources = useFactoryStore((s) => s.optimizationTargetResources);
   const loadFactory = useFactoryStore((s) => s.loadFactory);
   const setFactoryName = useFactoryStore((s) => s.setFactoryName);
   const solve = useFactoryStore((s) => s.solve);
@@ -53,7 +55,7 @@ export function SaveLoadPanel() {
       // Update existing — no prompt needed
       setLoading(true);
       try {
-        const config = { targets, provided_inputs: providedInputs, allowed_recipes: allowedRecipes, settings, mode, power_config: powerConfig ?? undefined };
+        const config = { targets, provided_inputs: providedInputs, allowed_recipes: allowedRecipes, settings, mode, power_config: powerConfig ?? undefined, optimization_goal: optimizationGoal, optimization_target_resources: optimizationTargetResources };
         await updateFactory(factoryId, factoryName, config);
         toast('success', `Factory "${factoryName}" updated`);
         await refreshList();
@@ -72,7 +74,7 @@ export function SaveLoadPanel() {
     setShowNamePrompt(false);
     setLoading(true);
     try {
-      const config = { targets, provided_inputs: providedInputs, allowed_recipes: allowedRecipes, settings, mode, power_config: powerConfig ?? undefined };
+      const config = { targets, provided_inputs: providedInputs, allowed_recipes: allowedRecipes, settings, mode, power_config: powerConfig ?? undefined, optimization_goal: optimizationGoal, optimization_target_resources: optimizationTargetResources };
       const saved = await createFactory(name, config);
       useFactoryStore.getState().setFactoryId(saved.id);
       setFactoryName(saved.name);
@@ -83,22 +85,13 @@ export function SaveLoadPanel() {
     } finally {
       setLoading(false);
     }
-  }, [targets, providedInputs, allowedRecipes, settings, mode, powerConfig, setFactoryName, toast]);
+  }, [targets, providedInputs, allowedRecipes, settings, mode, powerConfig, optimizationGoal, optimizationTargetResources, setFactoryName, toast]);
 
   const handleLoad = async (id: string) => {
     setLoading(true);
     try {
       const factory = await getFactory(id);
-      loadFactory(
-        factory.id,
-        factory.name,
-        factory.config.targets,
-        factory.config.provided_inputs ?? [],
-        factory.config.allowed_recipes,
-        factory.config.settings,
-        factory.config.mode,
-        factory.config.power_config
-      );
+      loadFactory(factory.id, factory.name, factory.config);
       toast('info', `Loaded "${factory.name}"`);
       await solve();
     } catch {

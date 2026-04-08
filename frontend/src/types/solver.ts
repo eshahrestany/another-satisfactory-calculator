@@ -19,6 +19,12 @@ export interface ResourceConstraint {
   max_rate_per_minute: number;
 }
 
+export type OptimizationGoal =
+  | 'minimize_resources'
+  | 'minimize_buildings'
+  | 'minimize_power'
+  | 'minimize_specific_resources';
+
 export interface SolveRequest {
   targets: ProductionTarget[];
   allowed_recipes: string[];
@@ -28,6 +34,8 @@ export interface SolveRequest {
   power_mode?: PowerModeConfig;
   resource_constraints?: ResourceConstraint[];
   disabled_recipes?: string[];
+  optimization_goal?: OptimizationGoal;
+  optimization_target_resources?: string[];
 }
 
 export interface ItemRate {

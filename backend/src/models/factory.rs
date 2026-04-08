@@ -1,15 +1,5 @@
 use serde::{Deserialize, Serialize};
-
-use super::solver_io::{GameSettings, ProductionTarget, ProvidedInput};
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct FactoryConfig {
-    pub targets: Vec<ProductionTarget>,
-    pub allowed_recipes: Vec<String>,
-    pub settings: GameSettings,
-    #[serde(default)]
-    pub provided_inputs: Vec<ProvidedInput>,
-}
+use serde_json::Value;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SavedFactory {
@@ -17,7 +7,7 @@ pub struct SavedFactory {
     pub name: String,
     pub created_at: String,
     pub updated_at: String,
-    pub config: FactoryConfig,
+    pub config: Value,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -31,11 +21,11 @@ pub struct FactoryMeta {
 #[derive(Debug, Clone, Deserialize)]
 pub struct CreateFactoryRequest {
     pub name: String,
-    pub config: FactoryConfig,
+    pub config: Value,
 }
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct UpdateFactoryRequest {
     pub name: Option<String>,
-    pub config: Option<FactoryConfig>,
+    pub config: Option<Value>,
 }

@@ -9,7 +9,7 @@ import { PowerConfigPanel } from './panels/PowerConfigPanel';
 import { RecipePanel } from './panels/RecipePanel';
 import { ResourceConstraintPanel } from './panels/ResourceConstraintPanel';
 import { SettingsPanel } from './panels/SettingsPanel';
-import { SaveLoadPanel } from './panels/SaveLoadPanel';
+import { OptimizationPanel } from './panels/OptimizationPanel';
 import { SummaryPanel } from './panels/SummaryPanel';
 import { StatusBar } from './StatusBar';
 import { KeyboardHelp } from './KeyboardHelp';
@@ -87,7 +87,7 @@ export function Layout() {
             <div className="border-t border-satisfactory-border/50 caution-stripe h-px" />
             <SettingsPanel />
             <div className="border-t border-satisfactory-border/50 caution-stripe h-px" />
-            <SaveLoadPanel />
+            <OptimizationPanel />
           </div>
         </div>
 

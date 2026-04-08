@@ -32,27 +32,29 @@ export function ResourceConstraintPanel() {
 
   return (
     <div>
-      <button
-        onClick={() => setOpen(!open)}
-        className="w-full flex items-center justify-between group"
-      >
-        <h3 className={`font-industrial font-bold text-xs uppercase tracking-[0.2em] flex items-center gap-2 transition-colors ${
-          isActive ? 'text-red-400' : 'text-satisfactory-muted'
-        }`}>
-          <span className={isActive ? 'text-red-500' : 'text-satisfactory-border'}>&#x25B2;</span>
-          Resource Limits
-          {isActive && (
-            <span className="text-[9px] bg-red-500/20 text-red-400 border border-red-500/30 px-1.5 py-0.5 rounded-sm font-bold">
-              {resourceConstraints.length}
-            </span>
-          )}
-        </h3>
-        <span className={`text-[10px] transition-transform ${open ? 'rotate-180' : ''} ${
-          isActive ? 'text-red-400' : 'text-satisfactory-muted'
-        }`}>
-          &#x25BC;
-        </span>
-      </button>
+      <Tooltip text="Cap extraction rates per resource. Useful for planning around finite node availability." side="right">
+        <button
+          onClick={() => setOpen(!open)}
+          className="w-full flex items-center justify-between group"
+        >
+          <h3 className={`font-industrial font-bold text-xs uppercase tracking-[0.2em] flex items-center gap-2 transition-colors ${
+            isActive ? 'text-red-400' : 'text-satisfactory-muted'
+          }`}>
+            <span className={isActive ? 'text-red-500' : 'text-satisfactory-border'}>{'>'}</span>
+            Resource Limits
+            {isActive && (
+              <span className="text-[9px] bg-red-500/20 text-red-400 border border-red-500/30 px-1.5 py-0.5 rounded-sm font-bold">
+                {resourceConstraints.length}
+              </span>
+            )}
+          </h3>
+          <span className={`text-[10px] ml-2 transition-transform ${open ? 'rotate-180' : ''} ${
+            isActive ? 'text-red-400' : 'text-satisfactory-muted'
+          }`}>
+            &#x25BC;
+          </span>
+        </button>
+      </Tooltip>
 
       {open && (
         <div className="mt-2">
@@ -121,11 +123,9 @@ export function ResourceConstraintPanel() {
           </div>
 
           {resourceConstraints.length === 0 && (
-            <Tooltip text="Cap extraction rates per resource. Useful for planning around finite node availability." side="right">
-              <div className="text-[10px] text-satisfactory-muted/60 mt-2 italic">
-                No limits set — solver uses resources freely
-              </div>
-            </Tooltip>
+            <div className="text-[10px] text-satisfactory-muted/60 mt-2 italic">
+              No limits set — solver uses resources freely
+            </div>
           )}
         </div>
       )}
