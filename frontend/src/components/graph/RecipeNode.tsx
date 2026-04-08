@@ -35,6 +35,7 @@ export function RecipeNode({ data }: { data: ProductionNode }) {
   const setNodeOverride = useFactoryStore((s) => s.setNodeOverride);
   const resetNodeOverride = useFactoryStore((s) => s.resetNodeOverride);
   const solve = useFactoryStore((s) => s.solve);
+  const isGuestMode = useFactoryStore((s) => s.isGuestMode);
 
   const nodeClockSpeed = override?.clockSpeed ?? globalClockSpeed;
   const somersloop = override?.somersloop ?? false;
@@ -43,7 +44,10 @@ export function RecipeNode({ data }: { data: ProductionNode }) {
   const { buildingCount, power } = applyClockOverride(data, nodeClockSpeed, globalClockSpeed);
 
   const handleClockChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    setNodeOverride(data.id, { clockSpeed: parseFloat(e.target.value) });
+    const val = parseFloat(e.target.value);
+    if (!isNaN(val)) {
+      setNodeOverride(data.id, { clockSpeed: Math.min(250, Math.max(1, val)) });
+    }
   }, [data.id, setNodeOverride]);
 
   const toggleSomersloop = useCallback(() => {
@@ -138,31 +142,33 @@ export function RecipeNode({ data }: { data: ProductionNode }) {
           </div>
           </Tooltip>
 
-          {/* Panel latch / expand toggle */}
-          <button
-            className="w-full mt-2 nopan nodrag group"
-            onClick={(e) => { e.stopPropagation(); setExpanded(!expanded); }}
-          >
-            <div className={`flex items-center justify-between px-2 py-1 transition-colors border ${
-              expanded
-                ? 'bg-satisfactory-darker border-satisfactory-orange/40 border-b-0'
-                : 'bg-satisfactory-darker/60 border-satisfactory-border/30 hover:border-satisfactory-orange/30'
-            }`}>
-              {/* Caution chevrons */}
-              <div className="flex items-center gap-1">
-                <span className="text-indicator-amber text-[8px] opacity-60">{'///'}</span>
-                <span className="font-industrial text-[9px] uppercase tracking-[0.2em] text-satisfactory-muted group-hover:text-satisfactory-orange transition-colors">
-                  Tuning
-                </span>
+          {/* Panel latch / expand toggle and tuning panel — hidden in guest mode */}
+          {!isGuestMode && (
+            <>
+            <button
+              className="w-full mt-2 nopan nodrag group"
+              onClick={(e) => { e.stopPropagation(); setExpanded(!expanded); }}
+            >
+              <div className={`flex items-center justify-between px-2 py-1 transition-colors border ${
+                expanded
+                  ? 'bg-satisfactory-darker border-satisfactory-orange/40 border-b-0'
+                  : 'bg-satisfactory-darker/60 border-satisfactory-border/30 hover:border-satisfactory-orange/30'
+              }`}>
+                {/* Caution chevrons */}
+                <div className="flex items-center gap-1">
+                  <span className="text-indicator-amber text-[8px] opacity-60">{'///'}</span>
+                  <span className="font-industrial text-[9px] uppercase tracking-[0.2em] text-satisfactory-muted group-hover:text-satisfactory-orange transition-colors">
+                    Tuning
+                  </span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  {hasOverride && <span className="w-1.5 h-1.5 rounded-full bg-satisfactory-orange animate-pulse-glow" />}
+                  <span className={`text-satisfactory-muted text-[8px] transition-transform duration-200 inline-block ${expanded ? 'rotate-180' : ''}`}>
+                    &#x25BE;
+                  </span>
+                </div>
               </div>
-              <div className="flex items-center gap-1.5">
-                {hasOverride && <span className="w-1.5 h-1.5 rounded-full bg-satisfactory-orange animate-pulse-glow" />}
-                <span className={`text-satisfactory-muted text-[8px] transition-transform duration-200 inline-block ${expanded ? 'rotate-180' : ''}`}>
-                  &#x25BE;
-                </span>
-              </div>
-            </div>
-          </button>
+            </button>
 
           {/* Physical tuning panel */}
           {expanded && (
@@ -182,10 +188,18 @@ export function RecipeNode({ data }: { data: ProductionNode }) {
                       <div className="w-px h-3 bg-satisfactory-orange/50" />
                       <span className="text-[9px] text-satisfactory-muted uppercase tracking-wider font-industrial">Clock Speed</span>
                     </div>
-                    <div className="industrial-inset px-1.5 py-0.5 min-w-[3rem] text-center">
-                      <span className="text-[10px] text-satisfactory-orange tabular-nums font-industrial">
-                        {nodeClockSpeed}%
-                      </span>
+                    <div className="industrial-inset flex items-center min-w-[3.5rem]">
+                      <input
+                        type="number"
+                        min={1}
+                        max={250}
+                        step={1}
+                        value={nodeClockSpeed}
+                        onChange={handleClockChange}
+                        onClick={(e) => e.stopPropagation()}
+                        className="w-full bg-transparent text-[10px] text-satisfactory-orange tabular-nums font-industrial text-center outline-none px-1.5 py-0.5 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                      />
+                      <span className="text-[10px] text-satisfactory-orange font-industrial pr-1.5">%</span>
                     </div>
                   </div>
                   {/* Slider track with tick marks */}
@@ -230,7 +244,7 @@ export function RecipeNode({ data }: { data: ProductionNode }) {
                       <div className={`relative w-7 h-3.5 border transition-colors flex-shrink-0 ${
                         somersloop ? 'border-purple-500/70 bg-purple-900/50' : 'border-satisfactory-border/50 bg-black/40'
                       }`}>
-                        <div className={`absolute top-0.5 w-2.5 h-2.5 transition-all duration-200 ${
+                        <div className={`absolute top-1/2 -translate-y-1/2 w-2.5 h-2.5 transition-all duration-200 ${
                           somersloop
                             ? 'left-[calc(100%-12px)] bg-purple-400 shadow-[0_0_4px_rgba(168,85,247,0.8)]'
                             : 'left-0.5 bg-satisfactory-muted/50'
@@ -264,6 +278,7 @@ export function RecipeNode({ data }: { data: ProductionNode }) {
               <div className="absolute bottom-1 right-1 w-1.5 h-1.5 rounded-full bg-satisfactory-border/40 border border-satisfactory-border/20" />
             </div>
           )}
+          </>)}
         </div>
 
         {/* Rivets */}

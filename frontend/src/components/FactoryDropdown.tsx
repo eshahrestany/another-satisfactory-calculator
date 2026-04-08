@@ -16,11 +16,14 @@ export function FactoryDropdown() {
   const [factories, setFactories] = useState<FactoryMeta[]>([]);
   const [loading, setLoading] = useState(false);
   const [showNamePrompt, setShowNamePrompt] = useState(false);
+  const [showSaveCopyPrompt, setShowSaveCopyPrompt] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
   const factoryId = useFactoryStore((s) => s.factoryId);
   const factoryName = useFactoryStore((s) => s.factoryName);
+  const isGuestMode = useFactoryStore((s) => s.isGuestMode);
+  const exitGuestMode = useFactoryStore((s) => s.exitGuestMode);
   const mode = useFactoryStore((s) => s.mode);
   const targets = useFactoryStore((s) => s.targets);
   const providedInputs = useFactoryStore((s) => s.providedInputs);
@@ -108,6 +111,21 @@ export function FactoryDropdown() {
     finally { setLoading(false); }
   }, [buildConfig, setFactoryName, toast, refreshList]);
 
+  const handleSaveCopyConfirm = useCallback(async (name: string) => {
+    setShowSaveCopyPrompt(false);
+    setLoading(true);
+    try {
+      const saved = await createFactory(name, buildConfig());
+      useFactoryStore.getState().setFactoryId(saved.id);
+      setFactoryName(saved.name);
+      exitGuestMode();
+      window.history.replaceState({}, '', window.location.pathname);
+      toast('success', `"${name}" saved to your factories`);
+      await refreshList();
+    } catch { toast('error', 'Failed to save factory'); }
+    finally { setLoading(false); }
+  }, [buildConfig, setFactoryName, exitGuestMode, toast, refreshList]);
+
   const handleLoad = async (id: string) => {
     setOpen(false);
     setLoading(true);
@@ -136,20 +154,38 @@ export function FactoryDropdown() {
 
   return (
     <div ref={containerRef} className="relative flex items-center gap-1">
-      <button
-        onClick={handleSave}
-        disabled={loading || !canSave}
-        className="text-[10px] font-industrial uppercase tracking-wider px-2 py-1 border border-satisfactory-border text-satisfactory-muted hover:text-satisfactory-orange hover:border-satisfactory-orange/50 transition-colors disabled:opacity-40"
-      >
-        {factoryId ? 'Update' : 'Save'}
-      </button>
-
-      <button
-        onClick={clearFactory}
-        className="text-[10px] font-industrial uppercase tracking-wider px-2 py-1 border border-satisfactory-border text-satisfactory-muted hover:text-satisfactory-text transition-colors"
-      >
-        New
-      </button>
+      {isGuestMode ? (
+        <>
+          <span className="flex items-center gap-1.5 text-[10px] font-industrial uppercase tracking-wider px-2 py-1 border border-satisfactory-border/50 text-satisfactory-muted/60 bg-satisfactory-darker/40">
+            <span className="text-[8px] opacity-60">⊘</span>
+            View Only
+          </span>
+          <button
+            onClick={() => setShowSaveCopyPrompt(true)}
+            disabled={loading}
+            className="relative text-[10px] font-industrial font-bold uppercase tracking-wider px-3 py-1 bg-satisfactory-orange text-satisfactory-darker hover:shadow-glow-orange active:translate-y-px transition-all disabled:opacity-40"
+            style={{ clipPath: 'polygon(0 0, calc(100% - 5px) 0, 100% 5px, 100% 100%, 5px 100%, 0 calc(100% - 5px))' }}
+          >
+            {loading ? '...' : 'Save Copy'}
+          </button>
+        </>
+      ) : (
+        <>
+          <button
+            onClick={handleSave}
+            disabled={loading || !canSave}
+            className="text-[10px] font-industrial uppercase tracking-wider px-2 py-1 border border-satisfactory-border text-satisfactory-muted hover:text-satisfactory-orange hover:border-satisfactory-orange/50 transition-colors disabled:opacity-40"
+          >
+            {factoryId ? 'Update' : 'Save'}
+          </button>
+          <button
+            onClick={clearFactory}
+            className="text-[10px] font-industrial uppercase tracking-wider px-2 py-1 border border-satisfactory-border text-satisfactory-muted hover:text-satisfactory-text transition-colors"
+          >
+            New
+          </button>
+        </>
+      )}
 
       <button
         onClick={() => setOpen((v) => !v)}
@@ -205,6 +241,16 @@ export function FactoryDropdown() {
         placeholder="My Factory"
         onConfirm={handleNameConfirm}
         onCancel={() => setShowNamePrompt(false)}
+      />
+
+      <PromptDialog
+        open={showSaveCopyPrompt}
+        title="Save Copy"
+        label="Factory Name"
+        defaultValue={factoryName}
+        placeholder="My Factory"
+        onConfirm={handleSaveCopyConfirm}
+        onCancel={() => setShowSaveCopyPrompt(false)}
       />
 
       <ConfirmDialog

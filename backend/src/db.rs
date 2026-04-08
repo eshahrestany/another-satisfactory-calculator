@@ -10,6 +10,12 @@ pub fn init_db(path: &str) -> Result<Connection> {
             created_at  TEXT NOT NULL DEFAULT (datetime('now')),
             updated_at  TEXT NOT NULL DEFAULT (datetime('now')),
             config      TEXT NOT NULL
+        );
+        CREATE TABLE IF NOT EXISTS share_links (
+            token      TEXT PRIMARY KEY,
+            factory_id TEXT NOT NULL,
+            created_at TEXT NOT NULL DEFAULT (datetime('now')),
+            FOREIGN KEY (factory_id) REFERENCES factories(id) ON DELETE CASCADE
         );",
     )?;
     // Migration: add user_id to databases created before per-user isolation

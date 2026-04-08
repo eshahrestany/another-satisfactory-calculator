@@ -21,6 +21,7 @@ export function InputNode({ data }: { data: ProductionNode }) {
   const defaultMinerLevel = useFactoryStore((s) => s.defaultMinerLevel);
   const purity = useFactoryStore((s) => s.inputNodePurities[data.id]) ?? 'normal';
   const setInputNodePurity = useFactoryStore((s) => s.setInputNodePurity);
+  const isGuestMode = useFactoryStore((s) => s.isGuestMode);
 
   const isMiner = !isWater && !isOil;
 
@@ -66,24 +67,26 @@ export function InputNode({ data }: { data: ProductionNode }) {
 
           {isOil && oilExtractorCount !== null && (
             <>
-              <div className="mt-1.5 flex items-center gap-1">
-                {(['impure', 'normal', 'pure'] as ResourcePurity[]).map((p) => (
-                  <button
-                    key={p}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setInputNodePurity(data.id, p);
-                    }}
-                    className={`flex-1 text-[9px] uppercase tracking-wider py-0.5 px-1 transition-colors border ${
-                      purity === p
-                        ? 'bg-cyan-900/60 text-cyan-300 border-cyan-600/80'
-                        : 'bg-transparent text-satisfactory-muted border-satisfactory-border/30 hover:text-cyan-400 hover:border-cyan-700/50'
-                    }`}
-                  >
-                    {p}
-                  </button>
-                ))}
-              </div>
+              {!isGuestMode && (
+                <div className="mt-1.5 flex items-center gap-1">
+                  {(['impure', 'normal', 'pure'] as ResourcePurity[]).map((p) => (
+                    <button
+                      key={p}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setInputNodePurity(data.id, p);
+                      }}
+                      className={`flex-1 text-[9px] uppercase tracking-wider py-0.5 px-1 transition-colors border ${
+                        purity === p
+                          ? 'bg-cyan-900/60 text-cyan-300 border-cyan-600/80'
+                          : 'bg-transparent text-satisfactory-muted border-satisfactory-border/30 hover:text-cyan-400 hover:border-cyan-700/50'
+                      }`}
+                    >
+                      {p}
+                    </button>
+                  ))}
+                </div>
+              )}
               <div className="industrial-inset px-2 py-1 mt-1 flex items-center justify-between">
                 <span className="text-[9px] text-satisfactory-muted uppercase">Oil Extractors</span>
                 <span className="text-xs text-cyan-300 font-bold">
@@ -96,24 +99,26 @@ export function InputNode({ data }: { data: ProductionNode }) {
 
           {isMiner && minerCount !== null && (
             <>
-              <div className="mt-1.5 flex items-center gap-1">
-                {(['impure', 'normal', 'pure'] as ResourcePurity[]).map((p) => (
-                  <button
-                    key={p}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setInputNodePurity(data.id, p);
-                    }}
-                    className={`flex-1 text-[9px] uppercase tracking-wider py-0.5 px-1 transition-colors border ${
-                      purity === p
-                        ? 'bg-cyan-900/60 text-cyan-300 border-cyan-600/80'
-                        : 'bg-transparent text-satisfactory-muted border-satisfactory-border/30 hover:text-cyan-400 hover:border-cyan-700/50'
-                    }`}
-                  >
-                    {p}
-                  </button>
-                ))}
-              </div>
+              {!isGuestMode && (
+                <div className="mt-1.5 flex items-center gap-1">
+                  {(['impure', 'normal', 'pure'] as ResourcePurity[]).map((p) => (
+                    <button
+                      key={p}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setInputNodePurity(data.id, p);
+                      }}
+                      className={`flex-1 text-[9px] uppercase tracking-wider py-0.5 px-1 transition-colors border ${
+                        purity === p
+                          ? 'bg-cyan-900/60 text-cyan-300 border-cyan-600/80'
+                          : 'bg-transparent text-satisfactory-muted border-satisfactory-border/30 hover:text-cyan-400 hover:border-cyan-700/50'
+                      }`}
+                    >
+                      {p}
+                    </button>
+                  ))}
+                </div>
+              )}
               <div className="industrial-inset px-2 py-1 mt-1 flex items-center justify-between">
                 <span className="text-[9px] text-satisfactory-muted uppercase">Mk.{defaultMinerLevel} Miners</span>
                 <span className="text-xs text-cyan-300 font-bold">

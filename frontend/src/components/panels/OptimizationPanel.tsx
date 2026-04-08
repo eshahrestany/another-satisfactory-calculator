@@ -16,6 +16,7 @@ export function OptimizationPanel() {
   const selected = useFactoryStore((s) => s.optimizationTargetResources);
   const setGoal = useFactoryStore((s) => s.setOptimizationGoal);
   const toggleResource = useFactoryStore((s) => s.toggleOptimizationTargetResource);
+  const isGuestMode = useFactoryStore((s) => s.isGuestMode);
 
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState('');
@@ -76,7 +77,7 @@ export function OptimizationPanel() {
             {GOALS.map(([value, label, desc]) => (
               <label
                 key={value}
-                className={`flex items-start gap-2 px-2 py-1 cursor-pointer border transition-colors ${
+                className={`flex items-start gap-2 px-2 py-1 border transition-colors ${isGuestMode ? 'cursor-default' : 'cursor-pointer'} ${
                   goal === value
                     ? 'border-satisfactory-orange/50 bg-satisfactory-orange/10'
                     : 'border-transparent hover:bg-satisfactory-border/20'
@@ -88,7 +89,8 @@ export function OptimizationPanel() {
                   value={value}
                   checked={goal === value}
                   onChange={() => setGoal(value)}
-                  className="mt-0.5 accent-satisfactory-orange"
+                  disabled={isGuestMode}
+                  className="mt-0.5 accent-satisfactory-orange disabled:opacity-50 disabled:cursor-not-allowed"
                 />
                 <div>
                   <div className="text-xs text-satisfactory-text">{label}</div>
@@ -121,7 +123,7 @@ export function OptimizationPanel() {
                   return (
                     <label
                       key={item.id}
-                      className={`flex items-center gap-2 px-2 py-1 text-xs cursor-pointer transition-colors ${
+                      className={`flex items-center gap-2 px-2 py-1 text-xs transition-colors ${isGuestMode ? 'cursor-default' : 'cursor-pointer'} ${
                         checked
                           ? 'bg-satisfactory-orange/10 text-satisfactory-text'
                           : 'text-satisfactory-muted hover:bg-satisfactory-border/20'
@@ -131,7 +133,8 @@ export function OptimizationPanel() {
                         type="checkbox"
                         checked={checked}
                         onChange={() => toggleResource(item.id)}
-                        className="accent-satisfactory-orange"
+                        disabled={isGuestMode}
+                        className="accent-satisfactory-orange disabled:opacity-50 disabled:cursor-not-allowed"
                       />
                       <span>{item.name}</span>
                     </label>

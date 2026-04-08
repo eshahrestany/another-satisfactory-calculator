@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import type { ProductionTarget, ProvidedInput, PowerModeConfig, GameSettings, SolveResponse, ResourceConstraint, OptimizationGoal } from '../types/solver';
-import type { FactoryConfig } from '../types/factory';
+import type { FactoryConfig, SavedFactory } from '../types/factory';
 import type { Item, Recipe, Building, Generator } from '../types/gameData';
 import { solveProdution } from '../api/solver';
 import { fetchItems, fetchRecipes, fetchBuildings, fetchGenerators } from '../api/gameData';
@@ -71,6 +71,13 @@ interface FactoryStore {
   toggleOptimizationTargetResource: (itemId: string) => void;
   setOptimizationTargetResources: (itemIds: string[]) => void;
 
+  // Guest mode (view-only shared factory)
+  isGuestMode: boolean;
+  shareToken: string | null;
+  guestUpdatedAt: string | null;
+  enterGuestMode: (token: string, factory: SavedFactory) => void;
+  exitGuestMode: () => void;
+
   // Actions
   setFactoryId: (id: string | null) => void;
   setFactoryName: (name: string) => void;
@@ -114,6 +121,10 @@ export const useFactoryStore = create<FactoryStore>((set, get) => ({
   solveResult: null,
   solveError: null,
   solving: false,
+
+  isGuestMode: false,
+  shareToken: null,
+  guestUpdatedAt: null,
 
   selectedNodeId: null,
   setSelectedNodeId: (id) => set({ selectedNodeId: id }),
@@ -302,6 +313,35 @@ export const useFactoryStore = create<FactoryStore>((set, get) => ({
       useToastStore.getState().addToast('error', msg);
     }
   },
+
+  enterGuestMode: (token, factory) => {
+    const config = factory.config;
+    set({
+      factoryId: factory.id,
+      factoryName: factory.name,
+      mode: config.mode ?? 'production',
+      targets: config.targets,
+      providedInputs: config.provided_inputs ?? [],
+      allowedRecipes: config.allowed_recipes,
+      settings: config.settings,
+      powerConfig: config.power_config ?? null,
+      optimizationGoal: config.optimization_goal ?? 'minimize_resources',
+      optimizationTargetResources: config.optimization_target_resources ?? [],
+      resourceConstraints: config.resource_constraints ?? [],
+      disabledRecipes: config.disabled_recipes ?? [],
+      nodeOverrides: config.node_overrides ?? {},
+      inputNodePurities: config.input_node_purities ?? {},
+      defaultMinerLevel: config.default_miner_level ?? 3,
+      solveResult: null,
+      solveError: null,
+      selectedNodeId: null,
+      isGuestMode: true,
+      shareToken: token,
+      guestUpdatedAt: factory.updated_at,
+    });
+  },
+
+  exitGuestMode: () => set({ isGuestMode: false, shareToken: null, guestUpdatedAt: null }),
 
   loadFactory: (id, name, config) =>
     set({

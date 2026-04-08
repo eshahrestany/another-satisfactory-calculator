@@ -9,6 +9,8 @@ export function ResourceConstraintPanel() {
   const removeResourceConstraint = useFactoryStore((s) => s.removeResourceConstraint);
   const updateResourceConstraint = useFactoryStore((s) => s.updateResourceConstraint);
 
+  const isGuestMode = useFactoryStore((s) => s.isGuestMode);
+
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState('');
   const [showDropdown, setShowDropdown] = useState(false);
@@ -77,50 +79,55 @@ export function ResourceConstraintPanel() {
                       max_rate_per_minute: parseFloat(e.target.value) || 0,
                     })
                   }
-                  className="w-20 industrial-inset rounded-none px-2 py-1 text-xs text-white focus:border-red-400 outline-none"
+                  disabled={isGuestMode}
+                  className="w-20 industrial-inset rounded-none px-2 py-1 text-xs text-white focus:border-red-400 outline-none disabled:opacity-50 disabled:cursor-not-allowed"
                 />
                 <span className="text-[10px] text-satisfactory-muted">/min</span>
-                <button
-                  onClick={() => removeResourceConstraint(i)}
-                  className="text-red-500/60 hover:text-red-400 text-xs px-1 opacity-0 group-hover:opacity-100 transition-opacity"
-                >
-                  [x]
-                </button>
+                {!isGuestMode && (
+                  <button
+                    onClick={() => removeResourceConstraint(i)}
+                    className="text-red-500/60 hover:text-red-400 text-xs px-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                  >
+                    [x]
+                  </button>
+                )}
               </div>
             );
           })}
 
-          <div className="relative mt-2">
-            <input
-              type="text"
-              placeholder="Add resource limit..."
-              value={search}
-              onChange={(e) => {
-                setSearch(e.target.value);
-                setShowDropdown(true);
-              }}
-              onFocus={() => setShowDropdown(true)}
-              onBlur={() => setTimeout(() => setShowDropdown(false), 150)}
-              className="w-full industrial-inset rounded-none px-2 py-1.5 text-xs text-white placeholder-satisfactory-muted/50 focus:border-red-400 outline-none"
-            />
-            {showDropdown && search && (
-              <div className="absolute z-20 w-full mt-1 industrial-panel max-h-48 overflow-y-auto">
-                {availableItems.map((item) => (
-                  <button
-                    key={item.id}
-                    onMouseDown={(e) => e.preventDefault()}
-                    onClick={() => handleSelect(item.id)}
-                    className="w-full text-left px-2 py-1.5 text-xs text-satisfactory-text hover:bg-red-500/10 hover:text-red-400 transition-colors border-b border-satisfactory-border/20 last:border-0"
-                  >
-                    {item.name}
-                  </button>
-                ))}
-                {availableItems.length === 0 && (
-                  <div className="px-2 py-1.5 text-xs text-satisfactory-muted">No resources found</div>
-                )}
-              </div>
-            )}
-          </div>
+          {!isGuestMode && (
+            <div className="relative mt-2">
+              <input
+                type="text"
+                placeholder="Add resource limit..."
+                value={search}
+                onChange={(e) => {
+                  setSearch(e.target.value);
+                  setShowDropdown(true);
+                }}
+                onFocus={() => setShowDropdown(true)}
+                onBlur={() => setTimeout(() => setShowDropdown(false), 150)}
+                className="w-full industrial-inset rounded-none px-2 py-1.5 text-xs text-white placeholder-satisfactory-muted/50 focus:border-red-400 outline-none"
+              />
+              {showDropdown && search && (
+                <div className="absolute z-20 w-full mt-1 industrial-panel max-h-48 overflow-y-auto">
+                  {availableItems.map((item) => (
+                    <button
+                      key={item.id}
+                      onMouseDown={(e) => e.preventDefault()}
+                      onClick={() => handleSelect(item.id)}
+                      className="w-full text-left px-2 py-1.5 text-xs text-satisfactory-text hover:bg-red-500/10 hover:text-red-400 transition-colors border-b border-satisfactory-border/20 last:border-0"
+                    >
+                      {item.name}
+                    </button>
+                  ))}
+                  {availableItems.length === 0 && (
+                    <div className="px-2 py-1.5 text-xs text-satisfactory-muted">No resources found</div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
 
           {resourceConstraints.length === 0 && (
             <div className="text-[10px] text-satisfactory-muted/60 mt-2 italic">

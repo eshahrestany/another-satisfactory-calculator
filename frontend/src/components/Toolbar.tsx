@@ -1,10 +1,12 @@
 import { useFactoryStore } from '../stores/useFactoryStore';
 import { Tooltip } from './Tooltip';
 import { FactoryDropdown } from './FactoryDropdown';
+import { ShareButton } from './ShareButton';
 
 export function Toolbar() {
   const factoryName = useFactoryStore((s) => s.factoryName);
   const setFactoryName = useFactoryStore((s) => s.setFactoryName);
+  const isGuestMode = useFactoryStore((s) => s.isGuestMode);
   const solve = useFactoryStore((s) => s.solve);
   const solving = useFactoryStore((s) => s.solving);
   const targets = useFactoryStore((s) => s.targets);
@@ -34,18 +36,24 @@ export function Toolbar() {
       {/* Factory name input */}
       <Tooltip text="Factory designation code. 'Untitled Factory' has been flagged by FICSIT compliance 47 times this quarter." side="bottom">
         <div className="flex items-center gap-2">
-          <span className="text-[10px] text-satisfactory-muted uppercase tracking-wider flex-shrink-0">ID:</span>
+          <span className={`text-[10px] uppercase tracking-wider flex-shrink-0 ${isGuestMode ? 'text-satisfactory-muted/40' : 'text-satisfactory-muted'}`}>ID:</span>
           <input
             type="text"
             value={factoryName}
             onChange={(e) => setFactoryName(e.target.value)}
-            className="bg-satisfactory-darker/50 border border-satisfactory-border text-white text-xs px-2 py-1 focus:border-satisfactory-orange outline-none shadow-industrial-inset w-36"
+            readOnly={isGuestMode}
+            className={`border text-xs px-2 py-1 outline-none shadow-industrial-inset w-36 transition-colors ${
+              isGuestMode
+                ? 'bg-satisfactory-darker/20 border-satisfactory-border/30 text-satisfactory-muted/50 cursor-default'
+                : 'bg-satisfactory-darker/50 border-satisfactory-border text-white focus:border-satisfactory-orange'
+            }`}
           />
         </div>
       </Tooltip>
 
       {/* Factory save/load controls */}
       <FactoryDropdown />
+      <ShareButton />
 
       <div className="flex-1" />
 

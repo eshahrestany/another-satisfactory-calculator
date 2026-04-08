@@ -8,6 +8,7 @@ export function SettingsPanel() {
   const updateSettings = useFactoryStore((s) => s.updateSettings);
   const defaultMinerLevel = useFactoryStore((s) => s.defaultMinerLevel);
   const setDefaultMinerLevel = useFactoryStore((s) => s.setDefaultMinerLevel);
+  const isGuestMode = useFactoryStore((s) => s.isGuestMode);
 
   return (
     <div>
@@ -41,7 +42,8 @@ export function SettingsPanel() {
                 step={0.1}
                 value={settings.cost_multiplier}
                 onChange={(e) => updateSettings({ cost_multiplier: parseFloat(e.target.value) })}
-                className="w-full accent-satisfactory-orange"
+                disabled={isGuestMode}
+                className="w-full accent-satisfactory-orange disabled:opacity-40 disabled:cursor-not-allowed"
               />
               <div className="flex justify-between text-[9px] text-satisfactory-muted">
                 <span>0.5x</span>
@@ -63,7 +65,8 @@ export function SettingsPanel() {
                 step={1}
                 value={settings.clock_speed ?? 100}
                 onChange={(e) => updateSettings({ clock_speed: parseFloat(e.target.value) })}
-                className="w-full accent-satisfactory-orange"
+                disabled={isGuestMode}
+                className="w-full accent-satisfactory-orange disabled:opacity-40 disabled:cursor-not-allowed"
               />
               <div className="flex justify-between text-[9px] text-satisfactory-muted">
                 <span>1%</span>
@@ -85,7 +88,8 @@ export function SettingsPanel() {
                 step={0.1}
                 value={settings.power_consumption_multiplier}
                 onChange={(e) => updateSettings({ power_consumption_multiplier: parseFloat(e.target.value) })}
-                className="w-full accent-satisfactory-orange"
+                disabled={isGuestMode}
+                className="w-full accent-satisfactory-orange disabled:opacity-40 disabled:cursor-not-allowed"
               />
               <div className="flex justify-between text-[9px] text-satisfactory-muted">
                 <span>0.5x</span>
@@ -102,7 +106,8 @@ export function SettingsPanel() {
                   <button
                     key={level}
                     onClick={() => setDefaultMinerLevel(level)}
-                    className={`flex-1 py-1.5 text-xs font-industrial uppercase tracking-wider transition-colors border ${
+                    disabled={isGuestMode}
+                    className={`flex-1 py-1.5 text-xs font-industrial uppercase tracking-wider transition-colors border disabled:cursor-not-allowed ${
                       defaultMinerLevel === level
                         ? 'bg-satisfactory-orange/20 text-satisfactory-orange border-satisfactory-orange/60'
                         : 'bg-transparent text-satisfactory-muted border-satisfactory-border/40 hover:text-satisfactory-orange hover:border-satisfactory-orange/40'

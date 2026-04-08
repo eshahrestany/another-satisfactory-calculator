@@ -14,6 +14,7 @@ import { SummaryPanel } from './panels/SummaryPanel';
 import { StatusBar } from './StatusBar';
 import { KeyboardHelp } from './KeyboardHelp';
 import { useFactoryStore } from '../stores/useFactoryStore';
+import { GuestModeOverlay } from './GuestModeOverlay';
 
 export function Layout() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -21,6 +22,7 @@ export function Layout() {
   const solve = useFactoryStore((s) => s.solve);
   const clearFactory = useFactoryStore((s) => s.clearFactory);
   const mode = useFactoryStore((s) => s.mode);
+  const isGuestMode = useFactoryStore((s) => s.isGuestMode);
 
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
     // Don't trigger shortcuts when typing in inputs
@@ -69,6 +71,7 @@ export function Layout() {
           } transition-all duration-300 bg-satisfactory-panel border-r border-satisfactory-border overflow-hidden flex-shrink-0 animate-hum`}
         >
           <div className="w-72 h-full overflow-y-auto p-3 space-y-3">
+            <GuestModeOverlay />
             <ModeToggle />
             <div className="border-t border-satisfactory-border/50 caution-stripe h-px" />
             {mode === 'production' ? (

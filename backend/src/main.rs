@@ -61,6 +61,8 @@ async fn main() {
                 .put(routes::factories::update_factory)
                 .delete(routes::factories::delete_factory),
         )
+        .route("/api/factories/{id}/share", post(routes::shares::create_or_get_share))
+        .route("/api/share/{token}", get(routes::shares::get_shared_factory))
         .layer(axum_middleware::from_fn(middleware::user_id::user_id_middleware))
         .layer(cors)
         .with_state(state);

@@ -11,6 +11,7 @@ export function RecipePanel() {
   const toggleDisabledRecipe = useFactoryStore((s) => s.toggleDisabledRecipe);
   const setDisabledRecipes = useFactoryStore((s) => s.setDisabledRecipes);
   const items = useFactoryStore((s) => s.items);
+  const isGuestMode = useFactoryStore((s) => s.isGuestMode);
 
   return (
     <div className="space-y-3">
@@ -20,6 +21,7 @@ export function RecipePanel() {
         allowedRecipes={allowedRecipes}
         toggleRecipe={toggleRecipe}
         setAllowedRecipes={setAllowedRecipes}
+        isGuestMode={isGuestMode}
       />
       <DefaultRecipeDropdown
         recipes={recipes}
@@ -27,6 +29,7 @@ export function RecipePanel() {
         disabledRecipes={disabledRecipes}
         toggleDisabledRecipe={toggleDisabledRecipe}
         setDisabledRecipes={setDisabledRecipes}
+        isGuestMode={isGuestMode}
       />
     </div>
   );
@@ -38,12 +41,14 @@ function AlternateRecipeDropdown({
   allowedRecipes,
   toggleRecipe,
   setAllowedRecipes,
+  isGuestMode,
 }: {
   recipes: { id: string; name: string; is_alternate: boolean; products: { item_id: string }[] }[];
   items: { id: string; name: string }[];
   allowedRecipes: string[];
   toggleRecipe: (id: string) => void;
   setAllowedRecipes: (ids: string[]) => void;
+  isGuestMode: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState('');
@@ -114,12 +119,14 @@ function AlternateRecipeDropdown({
               onChange={(e) => setSearch(e.target.value)}
               className="flex-1 industrial-inset rounded-none px-2 py-1.5 text-xs text-white placeholder-satisfactory-muted/50 focus:border-satisfactory-orange outline-none"
             />
-            <button
-              onClick={handleSelectAll}
-              className="text-[9px] uppercase tracking-[0.1em] font-industrial text-satisfactory-muted hover:text-satisfactory-orange transition-colors ml-2 whitespace-nowrap"
-            >
-              {allSelected ? 'Deselect All' : 'Select All'}
-            </button>
+            {!isGuestMode && (
+              <button
+                onClick={handleSelectAll}
+                className="text-[9px] uppercase tracking-[0.1em] font-industrial text-satisfactory-muted hover:text-satisfactory-orange transition-colors ml-2 whitespace-nowrap"
+              >
+                {allSelected ? 'Deselect All' : 'Select All'}
+              </button>
+            )}
           </div>
 
           <div className="space-y-2 max-h-64 overflow-y-auto">
@@ -131,13 +138,14 @@ function AlternateRecipeDropdown({
                 {groupRecipes.map((recipe) => (
                   <label
                     key={recipe.id}
-                    className="flex items-center gap-2 text-xs text-satisfactory-text cursor-pointer hover:text-satisfactory-orange py-0.5 transition-colors"
+                    className={`flex items-center gap-2 text-xs text-satisfactory-text py-0.5 transition-colors ${isGuestMode ? 'cursor-default' : 'cursor-pointer hover:text-satisfactory-orange'}`}
                   >
                     <input
                       type="checkbox"
                       checked={allowedRecipes.includes(recipe.id)}
                       onChange={() => toggleRecipe(recipe.id)}
-                      className="accent-satisfactory-orange"
+                      disabled={isGuestMode}
+                      className="accent-satisfactory-orange disabled:opacity-50 disabled:cursor-not-allowed"
                     />
                     {recipe.name}
                   </label>
@@ -160,12 +168,14 @@ function DefaultRecipeDropdown({
   disabledRecipes,
   toggleDisabledRecipe,
   setDisabledRecipes,
+  isGuestMode,
 }: {
   recipes: { id: string; name: string; is_alternate: boolean; products: { item_id: string }[] }[];
   items: { id: string; name: string }[];
   disabledRecipes: string[];
   toggleDisabledRecipe: (id: string) => void;
   setDisabledRecipes: (ids: string[]) => void;
+  isGuestMode: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState('');
@@ -237,12 +247,14 @@ function DefaultRecipeDropdown({
               onChange={(e) => setSearch(e.target.value)}
               className="flex-1 industrial-inset rounded-none px-2 py-1.5 text-xs text-white placeholder-satisfactory-muted/50 focus:border-satisfactory-orange outline-none"
             />
-            <button
-              onClick={handleSelectAll}
-              className="text-[9px] uppercase tracking-[0.1em] font-industrial text-satisfactory-muted hover:text-satisfactory-orange transition-colors ml-2 whitespace-nowrap"
-            >
-              {allEnabled ? 'Deselect All' : 'Select All'}
-            </button>
+            {!isGuestMode && (
+              <button
+                onClick={handleSelectAll}
+                className="text-[9px] uppercase tracking-[0.1em] font-industrial text-satisfactory-muted hover:text-satisfactory-orange transition-colors ml-2 whitespace-nowrap"
+              >
+                {allEnabled ? 'Deselect All' : 'Select All'}
+              </button>
+            )}
           </div>
 
           <div className="space-y-2 max-h-64 overflow-y-auto">
@@ -254,13 +266,14 @@ function DefaultRecipeDropdown({
                 {groupRecipes.map((recipe) => (
                   <label
                     key={recipe.id}
-                    className="flex items-center gap-2 text-xs text-satisfactory-text cursor-pointer hover:text-satisfactory-orange py-0.5 transition-colors"
+                    className={`flex items-center gap-2 text-xs text-satisfactory-text py-0.5 transition-colors ${isGuestMode ? 'cursor-default' : 'cursor-pointer hover:text-satisfactory-orange'}`}
                   >
                     <input
                       type="checkbox"
                       checked={!disabledRecipes.includes(recipe.id)}
                       onChange={() => toggleDisabledRecipe(recipe.id)}
-                      className="accent-satisfactory-orange"
+                      disabled={isGuestMode}
+                      className="accent-satisfactory-orange disabled:opacity-50 disabled:cursor-not-allowed"
                     />
                     {recipe.name}
                   </label>
