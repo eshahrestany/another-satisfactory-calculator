@@ -22,7 +22,6 @@ export function Layout() {
   const solve = useFactoryStore((s) => s.solve);
   const clearFactory = useFactoryStore((s) => s.clearFactory);
   const mode = useFactoryStore((s) => s.mode);
-  const isGuestMode = useFactoryStore((s) => s.isGuestMode);
 
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
     // Don't trigger shortcuts when typing in inputs
