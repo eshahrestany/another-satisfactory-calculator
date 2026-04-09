@@ -269,7 +269,7 @@ export const useFactoryStore = create<FactoryStore>((set, get) => ({
     })),
 
   solve: async () => {
-    const { targets, providedInputs, allowedRecipes, settings, nodeOverrides, mode, powerConfig, resourceConstraints, disabledRecipes, optimizationGoal, optimizationTargetResources } = get();
+    const { targets, providedInputs, allowedRecipes, settings, nodeOverrides, mode, powerConfig, resourceConstraints, disabledRecipes, optimizationGoal, optimizationTargetResources, defaultMinerLevel } = get();
     if (mode === 'production' && targets.length === 0) return;
     if (mode === 'power' && (!powerConfig || powerConfig.target_mw <= 0)) return;
 
@@ -291,6 +291,7 @@ export const useFactoryStore = create<FactoryStore>((set, get) => ({
         settings,
         somersloops,
         provided_inputs: providedInputs,
+        miner_level: defaultMinerLevel,
         ...(mode === 'power' && powerConfig ? { power_mode: powerConfig } : {}),
         ...(resourceConstraints.length > 0 ? { resource_constraints: resourceConstraints } : {}),
         ...(disabledRecipes.length > 0 ? { disabled_recipes: disabledRecipes } : {}),

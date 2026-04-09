@@ -34,6 +34,35 @@ struct RecipeRates {
     consumption: HashMap<String, f64>,
 }
 
+/// Power draw (MW) per unit/min of a raw resource extracted, under the current settings.
+///
+/// Uses known game values for each extractor type at normal purity:
+///   - Solid miners: Mk.1 = 5 MW/60/min, Mk.2 = 15 MW/120/min, Mk.3 = 45 MW/240/min
+///   - Water Extractor: 20 MW / 120 m³/min
+///   - Oil Extractor:   40 MW / 120 m³/min
+///   - Nitrogen (Resource Well Extractor): free (0 MW)
+///
+/// Scaled by `power_consumption_multiplier` so it stays consistent with production power.
+fn extraction_power_coefficient(
+    item_id: &str,
+    is_liquid: bool,
+    miner_level: u8,
+    power_mult: f64,
+) -> f64 {
+    let base = match item_id {
+        "Desc_Water_C"       => 20.0 / 120.0,   // Water Extractor
+        "Desc_LiquidOil_C"   => 40.0 / 120.0,   // Oil Extractor
+        "Desc_NitrogenGas_C" => 0.0,             // Resource Well Extractor (free)
+        _ if is_liquid       => 20.0 / 120.0,   // Fallback for unknown liquids
+        _ => match miner_level {
+            1 => 5.0 / 60.0,
+            2 => 15.0 / 120.0,
+            _ => 45.0 / 240.0,
+        },
+    };
+    base * power_mult
+}
+
 /// Power draw per single instance of a recipe (MW), under the current settings.
 /// Returns 0.0 for virtual generator recipes (they produce power, not consume it).
 ///
@@ -375,6 +404,22 @@ pub fn solve(game_data: &GameData, request: &SolveRequest) -> Result<SolveRespon
         tracing::debug!("Resource constraints: {:?}", constraint_map);
     }
 
+    // Build extraction power coefficients (MW per unit/min extracted) for each resource.
+    // Used by the MinimizePower objective and the graph builder.
+    let extraction_power_coeffs: HashMap<String, f64> = resource_items
+        .iter()
+        .filter_map(|&res_id| {
+            let item = item_map.get(res_id)?;
+            let coeff = extraction_power_coefficient(
+                res_id,
+                item.is_liquid,
+                request.miner_level,
+                request.settings.power_consumption_multiplier,
+            );
+            Some((res_id.to_string(), coeff))
+        })
+        .collect();
+
     // Extraction variables for raw resources
     let mut extract_vars: HashMap<String, good_lp::Variable> = HashMap::new();
     for &res_id in &resource_items {
@@ -404,30 +449,59 @@ pub fn solve(game_data: &GameData, request: &SolveRequest) -> Result<SolveRespon
     }
 
     // Objective: depends on request.optimization_goal.
+    //
+    // Each primary objective gets a small epsilon secondary term to break ties
+    // deterministically and avoid degenerate LP solutions that are technically
+    // optimal but unintuitive (e.g., using an expensive alternate recipe when a
+    // simpler one yields the same primary cost).
+    //
+    //   MinimizeResources  → tiebreak: fewer buildings
+    //   MinimizeBuildings  → tiebreak: fewer raw resources
+    //   MinimizePower      → extraction power is PART of primary objective;
+    //                         tiebreak: fewer buildings
+    //   MinimizeSpecific   → tiebreak: fewer remaining resources
+
     let sum_all_extractions = |vars: &HashMap<String, good_lp::Variable>| -> Expression {
         vars.values()
             .fold(Expression::from(0.0), |acc, &v| acc + v)
     };
 
+    let sum_production_vars = || -> Expression {
+        allowed_recipes
+            .iter()
+            .enumerate()
+            .filter(|(_, r)| !r.id.starts_with("__gen_"))
+            .fold(Expression::from(0.0), |acc, (i, _)| acc + recipe_vars[i])
+    };
+
+    // Tiny epsilon for tie-breaking — large enough to prefer simpler solutions,
+    // small enough never to beat a genuinely better primary objective value.
+    // Primary objectives are O(10–10000); tiebreak contributions are O(epsilon * 100).
+    let epsilon_tiebreak = 1e-4_f64;
+
     let objective: Expression = match request.optimization_goal {
         OptimizationGoal::MinimizeResources => {
-            tracing::debug!("Objective: minimize total raw resource extraction");
-            sum_all_extractions(&extract_vars)
+            tracing::debug!("Objective: minimize total raw resource extraction (tiebreak: fewer buildings)");
+            sum_all_extractions(&extract_vars) + epsilon_tiebreak * sum_production_vars()
         }
         OptimizationGoal::MinimizeBuildings => {
-            tracing::debug!("Objective: minimize total buildings");
-            let mut expr = Expression::from(0.0);
-            for (i, recipe) in allowed_recipes.iter().enumerate() {
-                if recipe.id.starts_with("__gen_") {
-                    continue;
-                }
-                expr = expr + recipe_vars[i];
-            }
-            expr
+            tracing::debug!("Objective: minimize total buildings (tiebreak: fewer raw resources)");
+            let primary = sum_production_vars();
+            primary + epsilon_tiebreak * sum_all_extractions(&extract_vars)
         }
         OptimizationGoal::MinimizePower => {
-            tracing::debug!("Objective: minimize total factory power (MW)");
+            // Primary: production recipe power + extraction power (miners/extractors).
+            // This ensures the solver accounts for the full factory power draw, not just
+            // the processing buildings. Without extraction power, the solver may prefer
+            // paths with cheap production buildings but many expensive extractors
+            // (e.g. aluminum beam requires many water extractors vs a steel path).
+            tracing::debug!(
+                "Objective: minimize total factory power including extraction (miner level {})",
+                request.miner_level
+            );
             let mut expr = Expression::from(0.0);
+
+            // Production recipe power
             for (i, recipe) in allowed_recipes.iter().enumerate() {
                 let building = building_map.get(recipe.building_id.as_str()).copied();
                 let coeff = recipe_power_coefficient(
@@ -440,7 +514,22 @@ pub fn solve(game_data: &GameData, request: &SolveRequest) -> Result<SolveRespon
                     expr = expr + coeff * recipe_vars[i];
                 }
             }
-            expr
+
+            // Extraction power (miners/water extractors/oil pumps)
+            for (res_id, &var) in &extract_vars {
+                if let Some(&coeff) = extraction_power_coeffs.get(res_id) {
+                    if coeff > 0.0 {
+                        tracing::debug!(
+                            "  Extraction power coeff for '{}': {:.4} MW/(unit/min)",
+                            res_id, coeff
+                        );
+                        expr = expr + coeff * var;
+                    }
+                }
+            }
+
+            // Tiebreak: prefer fewer production buildings
+            expr + epsilon_tiebreak * sum_production_vars()
         }
         OptimizationGoal::MinimizeSpecificResources => {
             let selected: std::collections::HashSet<&str> = request
@@ -458,7 +547,7 @@ pub fn solve(game_data: &GameData, request: &SolveRequest) -> Result<SolveRespon
                     "Objective: MinimizeSpecificResources requested but {} selected item(s) matched 0 extraction variables — falling back to MinimizeResources",
                     request.optimization_target_resources.len()
                 );
-                sum_all_extractions(&extract_vars)
+                sum_all_extractions(&extract_vars) + epsilon_tiebreak * sum_production_vars()
             } else {
                 tracing::debug!(
                     "Objective: minimize specific resources ({} of {} selected items matched): {:?}",
@@ -470,9 +559,11 @@ pub fn solve(game_data: &GameData, request: &SolveRequest) -> Result<SolveRespon
                         .map(|(id, _)| id.as_str())
                         .collect::<Vec<_>>()
                 );
-                matched
+                let primary = matched
                     .iter()
-                    .fold(Expression::from(0.0), |acc, &v| acc + v)
+                    .fold(Expression::from(0.0), |acc, &v| acc + v);
+                // Tiebreak: prefer less total extraction overall
+                primary + epsilon_tiebreak * sum_all_extractions(&extract_vars)
             }
         }
     };
@@ -662,6 +753,7 @@ pub fn solve(game_data: &GameData, request: &SolveRequest) -> Result<SolveRespon
         &effective_targets,
         &request.settings,
         &request.somersloops,
+        &extraction_power_coeffs,
         is_power_mode,
         game_data,
         &item_map,
@@ -679,6 +771,7 @@ fn build_graph(
     targets: &[ProductionTarget],
     settings: &GameSettings,
     somersloops: &HashMap<String, bool>,
+    extraction_power_coeffs: &HashMap<String, f64>,
     is_power_mode: bool,
     game_data: &GameData,
     item_map: &HashMap<&str, &crate::models::game_data::Item>,
@@ -826,7 +919,7 @@ fn build_graph(
         }
     }
 
-    // Resource nodes
+    // Resource nodes — include estimated extractor/miner power
     for (item_id, &var) in extract_vars {
         let rate = solution.value(var);
         if rate < epsilon {
@@ -838,6 +931,23 @@ fn build_graph(
             .get(item_id.as_str())
             .map(|i| i.name.clone())
             .unwrap_or_else(|| item_id.clone());
+
+        let extraction_power = extraction_power_coeffs
+            .get(item_id)
+            .copied()
+            .unwrap_or(0.0)
+            * rate;
+
+        if extraction_power > 0.001 {
+            total_power += extraction_power;
+            // Record miners as a separate summary entry keyed by "__miners"
+            let entry = buildings_by_type
+                .entry("__miners".to_string())
+                .or_insert_with(|| ("Miners & Extractors".to_string(), 0.0, 0.0));
+            entry.2 += extraction_power;
+            // building_count is unused for this pseudo-entry; keep at 0 so it doesn't
+            // pollute the real buildings total
+        }
 
         nodes.push(ProductionNode {
             id: node_id.clone(),
@@ -855,7 +965,7 @@ fn build_graph(
                 item_name,
                 rate_per_minute: rate,
             }],
-            power_mw: 0.0,
+            power_mw: extraction_power,
         });
 
         item_producers

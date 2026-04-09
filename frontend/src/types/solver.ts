@@ -36,6 +36,8 @@ export interface SolveRequest {
   disabled_recipes?: string[];
   optimization_goal?: OptimizationGoal;
   optimization_target_resources?: string[];
+  /** Miner level (1–3) used to estimate extractor power for MinimizePower. Defaults to 2. */
+  miner_level?: number;
 }
 
 export interface ItemRate {

@@ -48,6 +48,15 @@ pub struct SolveRequest {
     /// If empty or no matches, the solver falls back to minimizing all resources.
     #[serde(default)]
     pub optimization_target_resources: Vec<String>,
+    /// Miner level used when estimating extractor power for the MinimizePower objective.
+    /// 1 = Mk.1 (5 MW / 60/min), 2 = Mk.2 (15 MW / 120/min), 3 = Mk.3 (45 MW / 240/min).
+    /// Defaults to 2 (Mk.2). Only affects MinimizePower objective and reported extraction power.
+    #[serde(default = "default_miner_level")]
+    pub miner_level: u8,
+}
+
+fn default_miner_level() -> u8 {
+    2
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

@@ -69,6 +69,15 @@ struct Args {
     #[arg(long, default_value = "1.0")]
     cost_mult: f64,
 
+    /// Power consumption multiplier (default: 1.0).
+    #[arg(long, default_value = "1.0")]
+    power_mult: f64,
+
+    /// Miner level used for extraction power estimates (1, 2, or 3; default: 2).
+    /// Only affects the MinimizePower objective and reported extraction power.
+    #[arg(long, default_value = "2", value_parser = clap::value_parser!(u8).range(1..=3))]
+    miner_level: u8,
+
     /// Path to data.json (default: data.json in current directory).
     #[arg(long, default_value = "data.json")]
     data: String,
@@ -198,7 +207,7 @@ fn main() {
         allowed_recipes,
         settings: GameSettings {
             cost_multiplier: args.cost_mult,
-            power_consumption_multiplier: 1.0,
+            power_consumption_multiplier: args.power_mult,
             clock_speed: args.clock,
         },
         somersloops: HashMap::new(),
@@ -208,6 +217,7 @@ fn main() {
         disabled_recipes: args.disabled.clone(),
         optimization_goal: args.optimize.into(),
         optimization_target_resources: args.minimize_resources.clone(),
+        miner_level: args.miner_level,
     };
 
     // Print solve header
@@ -229,7 +239,7 @@ fn main() {
     if !args.disabled.is_empty() {
         eprintln!("  Disabled recipes:   {}", args.disabled.join(", "));
     }
-    eprintln!("  Clock speed: {}%  cost_mult: {}", args.clock, args.cost_mult);
+    eprintln!("  Clock speed: {}%  cost_mult: {}  power_mult: {}  miner_level: Mk.{}", args.clock, args.cost_mult, args.power_mult, args.miner_level);
     let goal_label = match args.optimize {
         OptimizeArg::Resources => "minimize resources",
         OptimizeArg::Buildings => "minimize buildings",
