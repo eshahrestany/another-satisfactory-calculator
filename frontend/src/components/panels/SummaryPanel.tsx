@@ -5,12 +5,16 @@ import { Tooltip } from '../Tooltip';
 import {
   WATER_ITEM_ID,
   OIL_ITEM_ID,
+  NITROGEN_ITEM_ID,
   getMinerCount,
   getMinerPower,
   getExtractorCount,
   getExtractorPower,
   getOilExtractorCount,
   getOilExtractorPower,
+  getNitrogenExtractorCount,
+  getNitrogenPressurizerCount,
+  getNitrogenPower,
 } from '../../utils/mining';
 
 const SOMERSLOOP_SLOTS: Record<string, number> = {
@@ -95,6 +99,9 @@ export function SummaryPanel() {
   let oilExtractorPower = 0;
   let totalMiners = 0;
   let minerPower = 0;
+  let totalNitrogenExtractors = 0;
+  let totalNitrogenPressurizers = 0;
+  let nitrogenPower = 0;
 
   for (const node of solveResult.nodes) {
     if (node.node_type !== 'resource' && node.node_type !== 'input') continue;
@@ -112,6 +119,12 @@ export function SummaryPanel() {
       const count = getOilExtractorCount(rate, purity, nodeClockSpeed);
       totalOilExtractors += count;
       oilExtractorPower += getOilExtractorPower(count, nodeClockSpeed) * powerMultiplier;
+    } else if (node.item_id === NITROGEN_ITEM_ID) {
+      const purity = inputNodePurities[node.id] ?? 'normal';
+      const count = getNitrogenExtractorCount(rate, purity, nodeClockSpeed);
+      totalNitrogenExtractors += count;
+      totalNitrogenPressurizers += getNitrogenPressurizerCount(count);
+      nitrogenPower += getNitrogenPower(count, nodeClockSpeed) * powerMultiplier;
     } else {
       const purity = inputNodePurities[node.id] ?? 'normal';
       const count = getMinerCount(rate, defaultMinerLevel, purity, nodeClockSpeed);
@@ -159,6 +172,26 @@ export function SummaryPanel() {
     totalBuildingsPhysical += totalMiners;
   }
 
+  if (totalNitrogenExtractors > 0) {
+    buildingsByType.set('__nitrogen_extractor', {
+      building_id: '__nitrogen_extractor',
+      building_name: 'Res. Well Extractor',
+      count: totalNitrogenExtractors,
+      physicalCount: totalNitrogenExtractors,
+      power_mw: nitrogenPower,
+    });
+    buildingsByType.set('__nitrogen_pressurizer', {
+      building_id: '__nitrogen_pressurizer',
+      building_name: 'Res. Well Pressurizer',
+      count: totalNitrogenPressurizers,
+      physicalCount: totalNitrogenPressurizers,
+      power_mw: 0,
+    });
+    totalPower += nitrogenPower;
+    totalBuildings += totalNitrogenExtractors + totalNitrogenPressurizers;
+    totalBuildingsPhysical += totalNitrogenExtractors + totalNitrogenPressurizers;
+  }
+
   return (
     <div className="bg-satisfactory-panel border-t-2 border-satisfactory-border metal-texture animate-stamp">
       {/* Collapse toggle header */}
@@ -187,11 +220,13 @@ export function SummaryPanel() {
               <span className="text-indicator-amber">&#x26A1;</span> Power Draw
             </div>
           </Tooltip>
-          <div className="industrial-inset px-3 py-1.5 mb-1.5">
-            <span className="text-satisfactory-orange text-sm font-industrial font-bold animate-flicker">
-              {formatPower(totalPower)}
-            </span>
-          </div>
+          <Tooltip text={`${Math.round(totalPower).toLocaleString()} MW`}>
+            <div className="industrial-inset px-3 py-1.5 mb-1.5">
+              <span className="text-satisfactory-orange text-sm font-industrial font-bold animate-flicker">
+                {formatPower(totalPower)}
+              </span>
+            </div>
+          </Tooltip>
           {[...buildingsByType.values()].map((b) => (
             <div key={b.building_id} className="text-satisfactory-muted text-[10px] flex justify-between gap-3">
               <span>
@@ -260,11 +295,13 @@ export function SummaryPanel() {
               <div className="text-[9px] text-amber-400/80 font-industrial uppercase tracking-[0.2em] mb-1 flex items-center gap-1.5">
                 <span className="text-amber-400">&#x26A1;</span> Net Power
               </div>
-              <div className="industrial-inset px-3 py-1.5 mb-1.5">
-                <span className="text-amber-300 text-sm font-industrial font-bold animate-flicker">
-                  {formatPower(netPower)}
-                </span>
-              </div>
+              <Tooltip text={`${Math.round(netPower).toLocaleString()} MW`}>
+                <div className="industrial-inset px-3 py-1.5 mb-1.5">
+                  <span className="text-amber-300 text-sm font-industrial font-bold animate-flicker">
+                    {formatPower(netPower)}
+                  </span>
+                </div>
+              </Tooltip>
               <div className="text-satisfactory-muted text-[10px] flex justify-between gap-3">
                 <span>Generated</span>
                 <span className="text-amber-300">{formatPower(generatedPower)}</span>

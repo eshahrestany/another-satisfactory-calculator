@@ -213,7 +213,7 @@ export function InputNode({ data }: { data: ProductionNode }) {
                           <div className="w-px h-3 bg-satisfactory-orange/50" />
                           <span className="text-[9px] text-satisfactory-muted uppercase tracking-wider font-industrial">Clock Speed</span>
                         </div>
-                        <div className="industrial-inset flex items-center min-w-[3.5rem]">
+                        <div className="industrial-inset flex items-center min-w-[4.5rem]">
                           <input
                             type="number"
                             min={1}

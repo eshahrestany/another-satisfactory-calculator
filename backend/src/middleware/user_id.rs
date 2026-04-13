@@ -29,7 +29,7 @@ pub async fn user_id_middleware(mut req: Request, next: Next) -> Response {
 
     if is_new {
         let cookie_value = format!(
-            "user_id={}; Path=/; HttpOnly; SameSite=Lax",
+            "user_id={}; Path=/; HttpOnly; SameSite=Lax; Max-Age=31536000",
             user_id
         );
         if let Ok(val) = cookie_value.parse() {

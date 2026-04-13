@@ -50,6 +50,13 @@ export function RecipeNode({ data }: { data: ProductionNode }) {
     }
   }, [data.id, setNodeOverride]);
 
+  const balancedClock = (() => {
+    const n = Math.ceil(buildingCount - 0.001); // snap floating-point near-integers down
+    if (n === 0 || Math.abs(buildingCount - n) < 0.001) return null;
+    const c = Math.round((buildingCount / n) * nodeClockSpeed * 10000) / 10000;
+    return c >= 1 && c <= 250 ? c : null;
+  })();
+
   const toggleSomersloop = useCallback(() => {
     setNodeOverride(data.id, { somersloop: !somersloop });
     // Re-solve so the change cascades through the factory
@@ -184,11 +191,19 @@ export function RecipeNode({ data }: { data: ProductionNode }) {
                 {/* Clock speed */}
                 <div>
                   <div className="flex justify-between items-center mb-1.5">
-                    <div className="flex items-center gap-1">
+                    <div className="flex items-center gap-1.5">
                       <div className="w-px h-3 bg-satisfactory-orange/50" />
                       <span className="text-[9px] text-satisfactory-muted uppercase tracking-wider font-industrial">Clock Speed</span>
+                      {balancedClock !== null && (
+                        <button
+                          className="text-[8px] text-satisfactory-orange/60 hover:text-satisfactory-orange border border-satisfactory-orange/25 hover:border-satisfactory-orange/60 bg-satisfactory-orange/5 hover:bg-satisfactory-orange/10 px-1 py-px transition-colors font-industrial tracking-wider"
+                          onClick={(e) => { e.stopPropagation(); setNodeOverride(data.id, { clockSpeed: balancedClock }); }}
+                        >
+                          auto-bal
+                        </button>
+                      )}
                     </div>
-                    <div className="industrial-inset flex items-center min-w-[3.5rem]">
+                    <div className="industrial-inset flex items-center min-w-[4.5rem]">
                       <input
                         type="number"
                         min={1}

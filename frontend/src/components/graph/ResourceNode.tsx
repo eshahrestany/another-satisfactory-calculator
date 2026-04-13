@@ -7,15 +7,20 @@ import { Tooltip } from '../Tooltip';
 import {
   WATER_ITEM_ID,
   OIL_ITEM_ID,
+  NITROGEN_ITEM_ID,
   MINER_BASE_RATES,
   PURITY_MULTIPLIERS,
   OIL_EXTRACTOR_RATES,
+  NITROGEN_EXTRACTOR_RATES,
   getMinerCount,
   getMinerPower,
   getExtractorCount,
   getExtractorPower,
   getOilExtractorCount,
   getOilExtractorPower,
+  getNitrogenExtractorCount,
+  getNitrogenPressurizerCount,
+  getNitrogenPower,
   WATER_EXTRACTOR_RATE,
 } from '../../utils/mining';
 
@@ -25,6 +30,7 @@ export function ResourceNode({ data }: { data: ProductionNode }) {
   const rate = data.outputs[0]?.rate_per_minute ?? 0;
   const isWater = data.item_id === WATER_ITEM_ID;
   const isOil = data.item_id === OIL_ITEM_ID;
+  const isNitrogen = data.item_id === NITROGEN_ITEM_ID;
 
   const defaultMinerLevel = useFactoryStore((s) => s.defaultMinerLevel);
   const purity = useFactoryStore((s) => s.inputNodePurities[data.id]) ?? 'normal';
@@ -39,7 +45,7 @@ export function ResourceNode({ data }: { data: ProductionNode }) {
   const nodeClockSpeed = override?.clockSpeed ?? globalClockSpeed;
   const hasOverride = override !== undefined;
 
-  const isMiner = !isWater && !isOil;
+  const isMiner = !isWater && !isOil && !isNitrogen;
 
   const extractorCount = isWater ? getExtractorCount(rate, nodeClockSpeed) : null;
   const extractorRate = isWater ? WATER_EXTRACTOR_RATE * (nodeClockSpeed / 100) : null;
@@ -52,6 +58,26 @@ export function ResourceNode({ data }: { data: ProductionNode }) {
   const minerRate = MINER_BASE_RATES[defaultMinerLevel] * PURITY_MULTIPLIERS[purity] * (nodeClockSpeed / 100);
   const minerCount = isMiner ? getMinerCount(rate, defaultMinerLevel, purity, nodeClockSpeed) : null;
   const minerPower = isMiner && minerCount !== null ? getMinerPower(minerCount, defaultMinerLevel, nodeClockSpeed) * powerMultiplier : null;
+
+  const nitrogenExtractorCount = isNitrogen ? getNitrogenExtractorCount(rate, purity, nodeClockSpeed) : null;
+  const nitrogenPressurizerCount = nitrogenExtractorCount !== null ? getNitrogenPressurizerCount(nitrogenExtractorCount) : null;
+  const nitrogenExtractorRate = isNitrogen ? NITROGEN_EXTRACTOR_RATES[purity] * (nodeClockSpeed / 100) : null;
+  const nitrogenPower = isNitrogen && nitrogenExtractorCount !== null ? getNitrogenPower(nitrogenExtractorCount, nodeClockSpeed) * powerMultiplier : null;
+
+  const balancedClock = (() => {
+    const ratePerMachineAt100 = isWater
+      ? WATER_EXTRACTOR_RATE
+      : isOil
+      ? OIL_EXTRACTOR_RATES[purity]
+      : isNitrogen
+      ? NITROGEN_EXTRACTOR_RATES[purity]
+      : MINER_BASE_RATES[defaultMinerLevel] * PURITY_MULTIPLIERS[purity];
+    const raw = rate / (ratePerMachineAt100 * (nodeClockSpeed / 100));
+    const n = Math.ceil(raw - 0.001); // snap floating-point near-integers down
+    if (n === 0 || Math.abs(raw - n) < 0.001) return null;
+    const c = Math.round((raw / n) * nodeClockSpeed * 10000) / 10000;
+    return c >= 1 && c <= 250 ? c : null;
+  })();
 
   const handleClockChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const val = parseFloat(e.target.value);
@@ -132,6 +158,45 @@ export function ResourceNode({ data }: { data: ProductionNode }) {
             </>
           )}
 
+          {isNitrogen && nitrogenExtractorCount !== null && nitrogenExtractorRate !== null && (
+            <>
+              {!isGuestMode && (
+                <div className="mt-1.5 flex items-center gap-1">
+                  {(['impure', 'normal', 'pure'] as ResourcePurity[]).map((p) => (
+                    <button
+                      key={p}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setInputNodePurity(data.id, p);
+                      }}
+                      className={`flex-1 text-[9px] uppercase tracking-wider py-0.5 px-1 transition-colors border ${
+                        purity === p
+                          ? 'bg-green-900/60 text-green-300 border-green-600/80'
+                          : 'bg-transparent text-satisfactory-muted border-satisfactory-border/30 hover:text-green-400 hover:border-green-700/50'
+                      }`}
+                    >
+                      {p}
+                    </button>
+                  ))}
+                </div>
+              )}
+              <div className="industrial-inset px-2 py-1 mt-1 flex items-center justify-between">
+                <span className="text-[9px] text-satisfactory-muted uppercase">Extractors</span>
+                <span className={`text-xs font-bold ${hasOverride ? 'text-satisfactory-orange' : 'text-green-300'}`}>
+                  {nitrogenExtractorCount}
+                  <span className="text-[9px] text-green-500/60 ml-1">@ {formatRate(nitrogenExtractorRate)}/min</span>
+                </span>
+              </div>
+              <div className="industrial-inset px-2 py-1 mt-1 flex items-center justify-between">
+                <span className="text-[9px] text-satisfactory-muted uppercase">Pressurizers</span>
+                <span className={`text-xs font-bold ${hasOverride ? 'text-satisfactory-orange' : 'text-green-300'}`}>
+                  {nitrogenPressurizerCount}
+                  <span className="text-[9px] text-green-500/60 ml-1">avg. 8 extractors ea.</span>
+                </span>
+              </div>
+            </>
+          )}
+
           {isMiner && minerCount !== null && (
             <>
               {!isGuestMode && (
@@ -165,11 +230,11 @@ export function ResourceNode({ data }: { data: ProductionNode }) {
           )}
 
           {/* Power readout */}
-          {(extractorPower !== null || oilPower !== null || minerPower !== null) && (
+          {(extractorPower !== null || oilPower !== null || minerPower !== null || nitrogenPower !== null) && (
             <div className="mt-1.5 pt-1 border-t border-satisfactory-border/30 flex items-center justify-between">
               <span className="text-[9px] text-satisfactory-muted uppercase tracking-wider">PWR</span>
               <span className={`text-[10px] ${hasOverride ? 'text-satisfactory-orange' : 'text-satisfactory-orange/80'}`}>
-                {formatPower((extractorPower ?? 0) + (oilPower ?? 0) + (minerPower ?? 0))}
+                {formatPower((extractorPower ?? 0) + (oilPower ?? 0) + (minerPower ?? 0) + (nitrogenPower ?? 0))}
               </span>
             </div>
           )}
@@ -211,11 +276,19 @@ export function ResourceNode({ data }: { data: ProductionNode }) {
                   <div className="relative px-2.5 pt-2.5 pb-2 space-y-3">
                     <div>
                       <div className="flex justify-between items-center mb-1.5">
-                        <div className="flex items-center gap-1">
+                        <div className="flex items-center gap-1.5">
                           <div className="w-px h-3 bg-satisfactory-orange/50" />
                           <span className="text-[9px] text-satisfactory-muted uppercase tracking-wider font-industrial">Clock Speed</span>
+                          {balancedClock !== null && (
+                            <button
+                              className="text-[8px] text-satisfactory-orange/60 hover:text-satisfactory-orange border border-satisfactory-orange/25 hover:border-satisfactory-orange/60 bg-satisfactory-orange/5 hover:bg-satisfactory-orange/10 px-1 py-px transition-colors font-industrial tracking-wider"
+                              onClick={(e) => { e.stopPropagation(); setNodeOverride(data.id, { clockSpeed: balancedClock }); }}
+                            >
+                              auto-bal
+                            </button>
+                          )}
                         </div>
-                        <div className="industrial-inset flex items-center min-w-[3.5rem]">
+                        <div className="industrial-inset flex items-center min-w-[4.5rem]">
                           <input
                             type="number"
                             min={1}

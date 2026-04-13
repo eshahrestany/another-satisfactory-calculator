@@ -40,7 +40,8 @@ struct RecipeRates {
 ///   - Solid miners: Mk.1 = 5 MW/60/min, Mk.2 = 15 MW/120/min, Mk.3 = 45 MW/240/min
 ///   - Water Extractor: 20 MW / 120 m³/min
 ///   - Oil Extractor:   40 MW / 120 m³/min
-///   - Nitrogen (Resource Well Extractor): free (0 MW)
+///   - Nitrogen Gas (Resource Well Extractor): 150 MW / extractor-rate-per-min
+///     Mk.1 extractor = 30/min, Mk.2 = 60/min, Mk.3 = 120/min
 ///
 /// Scaled by `power_consumption_multiplier` so it stays consistent with production power.
 fn extraction_power_coefficient(
@@ -52,7 +53,10 @@ fn extraction_power_coefficient(
     let base = match item_id {
         "Desc_Water_C"       => 20.0 / 120.0,   // Water Extractor
         "Desc_LiquidOil_C"   => 40.0 / 120.0,   // Oil Extractor
-        "Desc_NitrogenGas_C" => 0.0,             // Resource Well Extractor (free)
+        // Resource Well Extractor: 150 MW per extractor at normal-purity nodes (60/min).
+        // Purity is a per-node UI setting not sent to the backend, so normal is the
+        // approximation used for the MinimizePower objective.
+        "Desc_NitrogenGas_C" => 150.0 / 60.0,
         _ if is_liquid       => 20.0 / 120.0,   // Fallback for unknown liquids
         _ => match miner_level {
             1 => 5.0 / 60.0,

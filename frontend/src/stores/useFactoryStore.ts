@@ -370,21 +370,13 @@ export const useFactoryStore = create<FactoryStore>((set, get) => ({
     set({
       factoryId: null,
       factoryName: 'Untitled Factory',
-      mode: 'production',
       targets: [],
       providedInputs: [],
-      allowedRecipes: [],
-      settings: { cost_multiplier: 1.0, power_consumption_multiplier: 1.0, clock_speed: 100 },
-      powerConfig: null,
       solveResult: null,
       solveError: null,
       selectedNodeId: null,
       nodeOverrides: {},
       inputNodePurities: {},
-      resourceConstraints: [],
-      disabledRecipes: [],
-      optimizationGoal: 'minimize_resources',
-      optimizationTargetResources: [],
     });
     useToastStore.getState().addToast('info', 'Factory cleared');
   },

@@ -10,8 +10,17 @@ export const WATER_EXTRACTOR_POWER_MW = 20;
 export const OIL_EXTRACTOR_RATES: Record<ResourcePurity, number> = { impure: 60, normal: 120, pure: 240 };
 export const OIL_EXTRACTOR_POWER_MW = 40;
 
+// Resource Well: Nitrogen Gas is extracted via Resource Well Pressurizer + Extractors.
+// Each pressurizer supports up to 8 extractors. The pressurizer's clock speed
+// clocks all attached extractors proportionally.
+// Rates are per-node purity (impure/normal/pure), not per miner Mk level.
+export const NITROGEN_EXTRACTOR_RATES: Record<ResourcePurity, number> = { impure: 30, normal: 60, pure: 120 };
+export const NITROGEN_EXTRACTOR_POWER_MW = 150;
+export const NITROGEN_MAX_EXTRACTORS_PER_PRESSURIZER = 8;
+
 export const WATER_ITEM_ID = 'Desc_Water_C';
 export const OIL_ITEM_ID = 'Desc_LiquidOil_C';
+export const NITROGEN_ITEM_ID = 'Desc_NitrogenGas_C';
 
 export function getMinerCount(rate: number, minerLevel: MinerLevel, purity: ResourcePurity, clockSpeed: number = 100): number {
   return Math.ceil(rate / (MINER_BASE_RATES[minerLevel] * PURITY_MULTIPLIERS[purity] * (clockSpeed / 100)));
@@ -35,4 +44,16 @@ export function getOilExtractorCount(rate: number, purity: ResourcePurity, clock
 
 export function getOilExtractorPower(count: number, clockSpeed: number = 100): number {
   return count * OIL_EXTRACTOR_POWER_MW * Math.pow(clockSpeed / 100, 1.321928);
+}
+
+export function getNitrogenExtractorCount(rate: number, purity: ResourcePurity, clockSpeed: number = 100): number {
+  return Math.ceil(rate / (NITROGEN_EXTRACTOR_RATES[purity] * (clockSpeed / 100)));
+}
+
+export function getNitrogenPressurizerCount(extractorCount: number): number {
+  return Math.ceil(extractorCount / NITROGEN_MAX_EXTRACTORS_PER_PRESSURIZER);
+}
+
+export function getNitrogenPower(extractorCount: number, clockSpeed: number = 100): number {
+  return extractorCount * NITROGEN_EXTRACTOR_POWER_MW * Math.pow(clockSpeed / 100, 1.321928);
 }

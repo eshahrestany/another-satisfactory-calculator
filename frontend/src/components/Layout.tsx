@@ -80,7 +80,11 @@ export function Layout() {
                 <InputPanel />
               </>
             ) : (
-              <PowerConfigPanel />
+              <>
+                <PowerConfigPanel />
+                <div className="border-t border-satisfactory-border/50 caution-stripe h-px" />
+                <InputPanel />
+              </>
             )}
             <div className="border-t border-satisfactory-border/50 caution-stripe h-px" />
             <RecipePanel />
