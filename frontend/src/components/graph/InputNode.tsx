@@ -1,7 +1,8 @@
+import { useState, useCallback } from 'react';
 import { Handle, Position } from '@xyflow/react';
 import type { ProductionNode } from '../../types/solver';
 import { useFactoryStore, type ResourcePurity } from '../../stores/useFactoryStore';
-import { formatRate } from '../../utils/formatting';
+import { formatRate, formatPower } from '../../utils/formatting';
 import {
   WATER_ITEM_ID,
   OIL_ITEM_ID,
@@ -9,11 +10,17 @@ import {
   PURITY_MULTIPLIERS,
   OIL_EXTRACTOR_RATES,
   getMinerCount,
+  getMinerPower,
   getExtractorCount,
+  getExtractorPower,
   getOilExtractorCount,
+  getOilExtractorPower,
+  WATER_EXTRACTOR_RATE,
 } from '../../utils/mining';
 
 export function InputNode({ data }: { data: ProductionNode }) {
+  const [expanded, setExpanded] = useState(false);
+
   const rate = data.outputs[0]?.rate_per_minute ?? 0;
   const isWater = data.item_id === WATER_ITEM_ID;
   const isOil = data.item_id === OIL_ITEM_ID;
@@ -22,20 +29,46 @@ export function InputNode({ data }: { data: ProductionNode }) {
   const purity = useFactoryStore((s) => s.inputNodePurities[data.id]) ?? 'normal';
   const setInputNodePurity = useFactoryStore((s) => s.setInputNodePurity);
   const isGuestMode = useFactoryStore((s) => s.isGuestMode);
+  const globalClockSpeed = useFactoryStore((s) => s.settings.clock_speed);
+  const powerMultiplier = useFactoryStore((s) => s.settings.power_consumption_multiplier);
+  const override = useFactoryStore((s) => s.nodeOverrides[data.id]);
+  const setNodeOverride = useFactoryStore((s) => s.setNodeOverride);
+  const resetNodeOverride = useFactoryStore((s) => s.resetNodeOverride);
+
+  const nodeClockSpeed = override?.clockSpeed ?? globalClockSpeed;
+  const hasOverride = override !== undefined;
 
   const isMiner = !isWater && !isOil;
 
-  const extractorCount = isWater ? getExtractorCount(rate) : null;
-  const oilExtractorCount = isOil ? getOilExtractorCount(rate, purity) : null;
-  const oilRate = isOil ? OIL_EXTRACTOR_RATES[purity] : null;
+  const extractorCount = isWater ? getExtractorCount(rate, nodeClockSpeed) : null;
+  const extractorRate = isWater ? WATER_EXTRACTOR_RATE * (nodeClockSpeed / 100) : null;
+  const extractorPower = isWater && extractorCount !== null ? getExtractorPower(extractorCount, nodeClockSpeed) * powerMultiplier : null;
 
-  const minerRate = MINER_BASE_RATES[defaultMinerLevel] * PURITY_MULTIPLIERS[purity];
-  const minerCount = isMiner ? getMinerCount(rate, defaultMinerLevel, purity) : null;
+  const oilExtractorCount = isOil ? getOilExtractorCount(rate, purity, nodeClockSpeed) : null;
+  const oilRate = isOil ? OIL_EXTRACTOR_RATES[purity] * (nodeClockSpeed / 100) : null;
+  const oilPower = isOil && oilExtractorCount !== null ? getOilExtractorPower(oilExtractorCount, nodeClockSpeed) * powerMultiplier : null;
+
+  const minerRate = MINER_BASE_RATES[defaultMinerLevel] * PURITY_MULTIPLIERS[purity] * (nodeClockSpeed / 100);
+  const minerCount = isMiner ? getMinerCount(rate, defaultMinerLevel, purity, nodeClockSpeed) : null;
+  const minerPower = isMiner && minerCount !== null ? getMinerPower(minerCount, defaultMinerLevel, nodeClockSpeed) * powerMultiplier : null;
+
+  const handleClockChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const val = parseFloat(e.target.value);
+    if (!isNaN(val)) {
+      setNodeOverride(data.id, { clockSpeed: Math.min(250, Math.max(1, val)) });
+    }
+  }, [data.id, setNodeOverride]);
+
+  const handleReset = useCallback(() => {
+    resetNodeOverride(data.id);
+  }, [data.id, resetNodeOverride]);
 
   return (
     <div className="node-stamp relative min-w-[190px]">
       <div
-        className="relative bg-node-resource border border-cyan-700/60 shadow-industrial metal-texture overflow-hidden"
+        className={`relative border shadow-industrial metal-texture overflow-hidden bg-node-resource ${
+          hasOverride ? 'border-satisfactory-orange/50' : 'border-cyan-700/60'
+        }`}
         style={{ clipPath: 'polygon(0 0, calc(100% - 8px) 0, 100% 8px, 100% 100%, 8px 100%, 0 calc(100% - 8px))' }}
       >
         <div className="absolute top-0 right-0 w-[12px] h-[12px] border-b border-cyan-700/60 rotate-45 translate-x-[4px] -translate-y-[4px] bg-satisfactory-darker" />
@@ -55,17 +88,17 @@ export function InputNode({ data }: { data: ProductionNode }) {
             </span>
           </div>
 
-          {isWater && extractorCount !== null && (
+          {isWater && extractorCount !== null && extractorRate !== null && (
             <div className="industrial-inset px-2 py-1 mt-1 flex items-center justify-between">
               <span className="text-[9px] text-satisfactory-muted uppercase">Extractors</span>
-              <span className="text-xs text-cyan-300 font-bold">
+              <span className={`text-xs font-bold ${hasOverride ? 'text-satisfactory-orange' : 'text-cyan-300'}`}>
                 {extractorCount}
-                <span className="text-[9px] text-cyan-500/60 ml-1">@ 120/min</span>
+                <span className="text-[9px] text-cyan-500/60 ml-1">@ {formatRate(extractorRate)}/min</span>
               </span>
             </div>
           )}
 
-          {isOil && oilExtractorCount !== null && (
+          {isOil && oilExtractorCount !== null && oilRate !== null && (
             <>
               {!isGuestMode && (
                 <div className="mt-1.5 flex items-center gap-1">
@@ -89,9 +122,9 @@ export function InputNode({ data }: { data: ProductionNode }) {
               )}
               <div className="industrial-inset px-2 py-1 mt-1 flex items-center justify-between">
                 <span className="text-[9px] text-satisfactory-muted uppercase">Oil Extractors</span>
-                <span className="text-xs text-cyan-300 font-bold">
+                <span className={`text-xs font-bold ${hasOverride ? 'text-satisfactory-orange' : 'text-cyan-300'}`}>
                   {oilExtractorCount}
-                  <span className="text-[9px] text-cyan-500/60 ml-1">@ {oilRate}/min</span>
+                  <span className="text-[9px] text-cyan-500/60 ml-1">@ {formatRate(oilRate)}/min</span>
                 </span>
               </div>
             </>
@@ -121,11 +154,110 @@ export function InputNode({ data }: { data: ProductionNode }) {
               )}
               <div className="industrial-inset px-2 py-1 mt-1 flex items-center justify-between">
                 <span className="text-[9px] text-satisfactory-muted uppercase">Mk.{defaultMinerLevel} Miners</span>
-                <span className="text-xs text-cyan-300 font-bold">
+                <span className={`text-xs font-bold ${hasOverride ? 'text-satisfactory-orange' : 'text-cyan-300'}`}>
                   {minerCount}
-                  <span className="text-[9px] text-cyan-500/60 ml-1">@ {minerRate}/min</span>
+                  <span className="text-[9px] text-cyan-500/60 ml-1">@ {formatRate(minerRate)}/min</span>
                 </span>
               </div>
+            </>
+          )}
+
+          {/* Power readout */}
+          {(extractorPower !== null || oilPower !== null || minerPower !== null) && (
+            <div className="mt-1.5 pt-1 border-t border-satisfactory-border/30 flex items-center justify-between">
+              <span className="text-[9px] text-satisfactory-muted uppercase tracking-wider">PWR</span>
+              <span className={`text-[10px] ${hasOverride ? 'text-satisfactory-orange' : 'text-satisfactory-orange/80'}`}>
+                {formatPower((extractorPower ?? 0) + (oilPower ?? 0) + (minerPower ?? 0))}
+              </span>
+            </div>
+          )}
+
+          {/* Tuning panel — hidden in guest mode */}
+          {!isGuestMode && (
+            <>
+              <button
+                className="w-full mt-2 nopan nodrag group"
+                onClick={(e) => { e.stopPropagation(); setExpanded(!expanded); }}
+              >
+                <div className={`flex items-center justify-between px-2 py-1 transition-colors border ${
+                  expanded
+                    ? 'bg-satisfactory-darker border-satisfactory-orange/40 border-b-0'
+                    : 'bg-satisfactory-darker/60 border-satisfactory-border/30 hover:border-satisfactory-orange/30'
+                }`}>
+                  <div className="flex items-center gap-1">
+                    <span className="text-indicator-amber text-[8px] opacity-60">{'///'}</span>
+                    <span className="font-industrial text-[9px] uppercase tracking-[0.2em] text-satisfactory-muted group-hover:text-satisfactory-orange transition-colors">
+                      Tuning
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    {hasOverride && <span className="w-1.5 h-1.5 rounded-full bg-satisfactory-orange animate-pulse-glow" />}
+                    <span className={`text-satisfactory-muted text-[8px] transition-transform duration-200 inline-block ${expanded ? 'rotate-180' : ''}`}>
+                      &#x25BE;
+                    </span>
+                  </div>
+                </div>
+              </button>
+
+              {expanded && (
+                <div className="relative border border-satisfactory-orange/40 border-t-0 bg-satisfactory-darker nopan nodrag"
+                  style={{ clipPath: 'polygon(0 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%)' }}
+                >
+                  <div className="absolute inset-0 pointer-events-none opacity-[0.04]"
+                    style={{ backgroundImage: 'repeating-linear-gradient(0deg, #fff 0px, #fff 1px, transparent 1px, transparent 3px)' }}
+                  />
+                  <div className="relative px-2.5 pt-2.5 pb-2 space-y-3">
+                    <div>
+                      <div className="flex justify-between items-center mb-1.5">
+                        <div className="flex items-center gap-1">
+                          <div className="w-px h-3 bg-satisfactory-orange/50" />
+                          <span className="text-[9px] text-satisfactory-muted uppercase tracking-wider font-industrial">Clock Speed</span>
+                        </div>
+                        <div className="industrial-inset flex items-center min-w-[3.5rem]">
+                          <input
+                            type="number"
+                            min={1}
+                            max={250}
+                            step={1}
+                            value={nodeClockSpeed}
+                            onChange={handleClockChange}
+                            onClick={(e) => e.stopPropagation()}
+                            className="w-full bg-transparent text-[10px] text-satisfactory-orange tabular-nums font-industrial text-center outline-none px-1.5 py-0.5 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                          />
+                          <span className="text-[10px] text-satisfactory-orange font-industrial pr-1.5">%</span>
+                        </div>
+                      </div>
+                      <div className="relative">
+                        <input
+                          type="range"
+                          min={1}
+                          max={250}
+                          step={1}
+                          value={nodeClockSpeed}
+                          onChange={handleClockChange}
+                          className="w-full accent-satisfactory-orange h-1 relative z-10"
+                          onClick={(e) => e.stopPropagation()}
+                        />
+                        <div className="flex justify-between text-[7px] text-satisfactory-muted/40 mt-0.5 font-industrial">
+                          <span>1%</span>
+                          <span>100%</span>
+                          <span>250%</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {hasOverride && (
+                      <button
+                        className="w-full flex items-center justify-center gap-1 py-0.5 text-[8px] text-satisfactory-muted/40 hover:text-red-400 transition-colors uppercase tracking-wider font-industrial border-t border-satisfactory-border/20 pt-1"
+                        onClick={(e) => { e.stopPropagation(); handleReset(); }}
+                      >
+                        <span>&#x21BA;</span> Reset to defaults
+                      </button>
+                    )}
+                  </div>
+                  <div className="absolute bottom-1 right-1 w-1.5 h-1.5 rounded-full bg-satisfactory-border/40 border border-satisfactory-border/20" />
+                </div>
+              )}
             </>
           )}
         </div>

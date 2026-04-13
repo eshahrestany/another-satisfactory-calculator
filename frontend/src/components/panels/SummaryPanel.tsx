@@ -102,20 +102,21 @@ export function SummaryPanel() {
     const rate = node.outputs[0]?.rate_per_minute ?? 0;
     if (rate <= 0) continue;
 
+    const nodeClockSpeed = nodeOverrides[node.id]?.clockSpeed ?? globalClockSpeed;
     if (node.item_id === WATER_ITEM_ID) {
-      const count = getExtractorCount(rate);
+      const count = getExtractorCount(rate, nodeClockSpeed);
       totalWaterExtractors += count;
-      waterExtractorPower += getExtractorPower(count) * powerMultiplier;
+      waterExtractorPower += getExtractorPower(count, nodeClockSpeed) * powerMultiplier;
     } else if (node.item_id === OIL_ITEM_ID) {
       const purity = inputNodePurities[node.id] ?? 'normal';
-      const count = getOilExtractorCount(rate, purity);
+      const count = getOilExtractorCount(rate, purity, nodeClockSpeed);
       totalOilExtractors += count;
-      oilExtractorPower += getOilExtractorPower(count) * powerMultiplier;
+      oilExtractorPower += getOilExtractorPower(count, nodeClockSpeed) * powerMultiplier;
     } else {
       const purity = inputNodePurities[node.id] ?? 'normal';
-      const count = getMinerCount(rate, defaultMinerLevel, purity);
+      const count = getMinerCount(rate, defaultMinerLevel, purity, nodeClockSpeed);
       totalMiners += count;
-      minerPower += getMinerPower(count, defaultMinerLevel) * powerMultiplier;
+      minerPower += getMinerPower(count, defaultMinerLevel, nodeClockSpeed) * powerMultiplier;
     }
   }
 
@@ -248,7 +249,11 @@ export function SummaryPanel() {
         </div>
 
         {/* Net Power — shown in power mode */}
-        {summary.net_power_mw != null && (
+        {summary.net_power_mw != null && (() => {
+          // generator_power_mw is fixed by the solve: net = generated - backend_consumed
+          const generatedPower = summary.net_power_mw + summary.total_power_mw;
+          const netPower = generatedPower - totalPower;
+          return (
           <>
             <div className="w-px bg-satisfactory-border/50 self-stretch" />
             <div className="flex-shrink-0">
@@ -257,12 +262,12 @@ export function SummaryPanel() {
               </div>
               <div className="industrial-inset px-3 py-1.5 mb-1.5">
                 <span className="text-amber-300 text-sm font-industrial font-bold animate-flicker">
-                  {formatPower(summary.net_power_mw)}
+                  {formatPower(netPower)}
                 </span>
               </div>
               <div className="text-satisfactory-muted text-[10px] flex justify-between gap-3">
                 <span>Generated</span>
-                <span className="text-amber-300">{formatPower(summary.net_power_mw + totalPower)}</span>
+                <span className="text-amber-300">{formatPower(generatedPower)}</span>
               </div>
               <div className="text-satisfactory-muted text-[10px] flex justify-between gap-3">
                 <span>Consumed</span>
@@ -270,7 +275,8 @@ export function SummaryPanel() {
               </div>
             </div>
           </>
-        )}
+          );
+        })()}
 
         {/* Somersloops — only shown when any are in use */}
         {totalSomersloops > 0 && (

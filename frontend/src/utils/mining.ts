@@ -13,26 +13,26 @@ export const OIL_EXTRACTOR_POWER_MW = 40;
 export const WATER_ITEM_ID = 'Desc_Water_C';
 export const OIL_ITEM_ID = 'Desc_LiquidOil_C';
 
-export function getMinerCount(rate: number, minerLevel: MinerLevel, purity: ResourcePurity): number {
-  return Math.ceil(rate / (MINER_BASE_RATES[minerLevel] * PURITY_MULTIPLIERS[purity]));
+export function getMinerCount(rate: number, minerLevel: MinerLevel, purity: ResourcePurity, clockSpeed: number = 100): number {
+  return Math.ceil(rate / (MINER_BASE_RATES[minerLevel] * PURITY_MULTIPLIERS[purity] * (clockSpeed / 100)));
 }
 
-export function getMinerPower(count: number, minerLevel: MinerLevel): number {
-  return count * MINER_POWER_MW[minerLevel];
+export function getMinerPower(count: number, minerLevel: MinerLevel, clockSpeed: number = 100): number {
+  return count * MINER_POWER_MW[minerLevel] * Math.pow(clockSpeed / 100, 1.321928);
 }
 
-export function getExtractorCount(rate: number): number {
-  return Math.ceil(rate / WATER_EXTRACTOR_RATE);
+export function getExtractorCount(rate: number, clockSpeed: number = 100): number {
+  return Math.ceil(rate / (WATER_EXTRACTOR_RATE * (clockSpeed / 100)));
 }
 
-export function getExtractorPower(count: number): number {
-  return count * WATER_EXTRACTOR_POWER_MW;
+export function getExtractorPower(count: number, clockSpeed: number = 100): number {
+  return count * WATER_EXTRACTOR_POWER_MW * Math.pow(clockSpeed / 100, 1.321928);
 }
 
-export function getOilExtractorCount(rate: number, purity: ResourcePurity): number {
-  return Math.ceil(rate / OIL_EXTRACTOR_RATES[purity]);
+export function getOilExtractorCount(rate: number, purity: ResourcePurity, clockSpeed: number = 100): number {
+  return Math.ceil(rate / (OIL_EXTRACTOR_RATES[purity] * (clockSpeed / 100)));
 }
 
-export function getOilExtractorPower(count: number): number {
-  return count * OIL_EXTRACTOR_POWER_MW;
+export function getOilExtractorPower(count: number, clockSpeed: number = 100): number {
+  return count * OIL_EXTRACTOR_POWER_MW * Math.pow(clockSpeed / 100, 1.321928);
 }
