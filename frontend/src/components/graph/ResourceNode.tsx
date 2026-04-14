@@ -42,7 +42,7 @@ export function ResourceNode({ data }: { data: ProductionNode }) {
   const setNodeOverride = useFactoryStore((s) => s.setNodeOverride);
   const resetNodeOverride = useFactoryStore((s) => s.resetNodeOverride);
 
-  const nodeClockSpeed = override?.clockSpeed ?? globalClockSpeed;
+  const nodeClockSpeed = override?.clockSpeed ?? (isWater ? globalClockSpeed : 100);
   const hasOverride = override !== undefined;
 
   const isMiner = !isWater && !isOil && !isNitrogen;
@@ -75,7 +75,7 @@ export function ResourceNode({ data }: { data: ProductionNode }) {
     const raw = rate / (ratePerMachineAt100 * (nodeClockSpeed / 100));
     const n = Math.ceil(raw - 0.001); // snap floating-point near-integers down
     if (n === 0 || Math.abs(raw - n) < 0.001) return null;
-    const c = Math.round((raw / n) * nodeClockSpeed * 10000) / 10000;
+    const c = Math.ceil((raw / n) * nodeClockSpeed * 10000) / 10000;
     return c >= 1 && c <= 250 ? c : null;
   })();
 

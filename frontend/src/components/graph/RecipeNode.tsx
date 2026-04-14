@@ -53,7 +53,7 @@ export function RecipeNode({ data }: { data: ProductionNode }) {
   const balancedClock = (() => {
     const n = Math.ceil(buildingCount - 0.001); // snap floating-point near-integers down
     if (n === 0 || Math.abs(buildingCount - n) < 0.001) return null;
-    const c = Math.round((buildingCount / n) * nodeClockSpeed * 10000) / 10000;
+    const c = Math.ceil((buildingCount / n) * nodeClockSpeed * 10000) / 10000;
     return c >= 1 && c <= 250 ? c : null;
   })();
 
