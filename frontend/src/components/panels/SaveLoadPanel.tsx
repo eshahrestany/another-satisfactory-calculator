@@ -32,7 +32,6 @@ export function SaveLoadPanel() {
   const optimizationTargetResources = useFactoryStore((s) => s.optimizationTargetResources);
   const loadFactory = useFactoryStore((s) => s.loadFactory);
   const setFactoryName = useFactoryStore((s) => s.setFactoryName);
-  const solve = useFactoryStore((s) => s.solve);
   const clearFactory = useFactoryStore((s) => s.clearFactory);
 
   const refreshList = async () => {
@@ -91,9 +90,8 @@ export function SaveLoadPanel() {
     setLoading(true);
     try {
       const factory = await getFactory(id);
-      loadFactory(factory.id, factory.name, factory.config);
+      await loadFactory(factory.id, factory.name, factory.config);
       toast('info', `Loaded "${factory.name}"`);
-      await solve();
     } catch {
       toast('error', 'Failed to load factory');
     } finally {

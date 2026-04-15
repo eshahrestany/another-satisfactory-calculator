@@ -109,23 +109,28 @@ export function SummaryPanel() {
     const rate = node.outputs[0]?.rate_per_minute ?? 0;
     if (rate <= 0) continue;
 
-    const nodeClockSpeed = nodeOverrides[node.id]?.clockSpeed ?? globalClockSpeed;
     if (node.item_id === WATER_ITEM_ID) {
+      // Water extractors follow the global clock speed by default (same as ResourceNode)
+      const nodeClockSpeed = nodeOverrides[node.id]?.clockSpeed ?? globalClockSpeed;
       const count = getExtractorCount(rate, nodeClockSpeed);
       totalWaterExtractors += count;
       waterExtractorPower += getExtractorPower(count, nodeClockSpeed) * powerMultiplier;
     } else if (node.item_id === OIL_ITEM_ID) {
+      // Non-water extractors/miners default to 100% clock speed (same as ResourceNode)
+      const nodeClockSpeed = nodeOverrides[node.id]?.clockSpeed ?? 100;
       const purity = inputNodePurities[node.id] ?? 'normal';
       const count = getOilExtractorCount(rate, purity, nodeClockSpeed);
       totalOilExtractors += count;
       oilExtractorPower += getOilExtractorPower(count, nodeClockSpeed) * powerMultiplier;
     } else if (node.item_id === NITROGEN_ITEM_ID) {
+      const nodeClockSpeed = nodeOverrides[node.id]?.clockSpeed ?? 100;
       const purity = inputNodePurities[node.id] ?? 'normal';
       const count = getNitrogenExtractorCount(rate, purity, nodeClockSpeed);
       totalNitrogenExtractors += count;
       totalNitrogenPressurizers += getNitrogenPressurizerCount(count);
       nitrogenPower += getNitrogenPower(count, nodeClockSpeed) * powerMultiplier;
     } else {
+      const nodeClockSpeed = nodeOverrides[node.id]?.clockSpeed ?? 100;
       const purity = inputNodePurities[node.id] ?? 'normal';
       const count = getMinerCount(rate, defaultMinerLevel, purity, nodeClockSpeed);
       totalMiners += count;
