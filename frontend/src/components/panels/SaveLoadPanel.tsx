@@ -30,6 +30,10 @@ export function SaveLoadPanel() {
   const powerConfig = useFactoryStore((s) => s.powerConfig);
   const optimizationGoal = useFactoryStore((s) => s.optimizationGoal);
   const optimizationTargetResources = useFactoryStore((s) => s.optimizationTargetResources);
+  const autoBalance = useFactoryStore((s) => s.autoBalance);
+  const autoBalanceRespectClock = useFactoryStore((s) => s.autoBalanceRespectClock);
+  const freeWater = useFactoryStore((s) => s.freeWater);
+  const defaultMinerLevel = useFactoryStore((s) => s.defaultMinerLevel);
   const loadFactory = useFactoryStore((s) => s.loadFactory);
   const setFactoryName = useFactoryStore((s) => s.setFactoryName);
   const solve = useFactoryStore((s) => s.solve);
@@ -55,7 +59,7 @@ export function SaveLoadPanel() {
       // Update existing — no prompt needed
       setLoading(true);
       try {
-        const config = { targets, provided_inputs: providedInputs, allowed_recipes: allowedRecipes, settings, mode, power_config: powerConfig ?? undefined, optimization_goal: optimizationGoal, optimization_target_resources: optimizationTargetResources };
+        const config = { targets, provided_inputs: providedInputs, allowed_recipes: allowedRecipes, settings, mode, power_config: powerConfig ?? undefined, optimization_goal: optimizationGoal, optimization_target_resources: optimizationTargetResources, auto_balance: autoBalance, auto_balance_respect_clock: autoBalanceRespectClock, free_water: freeWater, default_miner_level: defaultMinerLevel };
         await updateFactory(factoryId, factoryName, config);
         toast('success', `Factory "${factoryName}" updated`);
         await refreshList();
@@ -74,7 +78,7 @@ export function SaveLoadPanel() {
     setShowNamePrompt(false);
     setLoading(true);
     try {
-      const config = { targets, provided_inputs: providedInputs, allowed_recipes: allowedRecipes, settings, mode, power_config: powerConfig ?? undefined, optimization_goal: optimizationGoal, optimization_target_resources: optimizationTargetResources };
+      const config = { targets, provided_inputs: providedInputs, allowed_recipes: allowedRecipes, settings, mode, power_config: powerConfig ?? undefined, optimization_goal: optimizationGoal, optimization_target_resources: optimizationTargetResources, auto_balance: autoBalance, auto_balance_respect_clock: autoBalanceRespectClock, free_water: freeWater, default_miner_level: defaultMinerLevel };
       const saved = await createFactory(name, config);
       useFactoryStore.getState().setFactoryId(saved.id);
       setFactoryName(saved.name);
@@ -85,7 +89,7 @@ export function SaveLoadPanel() {
     } finally {
       setLoading(false);
     }
-  }, [targets, providedInputs, allowedRecipes, settings, mode, powerConfig, optimizationGoal, optimizationTargetResources, setFactoryName, toast]);
+  }, [targets, providedInputs, allowedRecipes, settings, mode, powerConfig, optimizationGoal, optimizationTargetResources, autoBalance, autoBalanceRespectClock, freeWater, defaultMinerLevel, setFactoryName, toast]);
 
   const handleLoad = async (id: string) => {
     setLoading(true);

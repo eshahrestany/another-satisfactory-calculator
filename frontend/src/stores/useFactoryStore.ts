@@ -1,10 +1,16 @@
 import { create } from 'zustand';
 import type { ProductionTarget, ProvidedInput, PowerModeConfig, GameSettings, SolveResponse, ResourceConstraint, OptimizationGoal } from '../types/solver';
+import {
+  WATER_ITEM_ID, OIL_ITEM_ID, NITROGEN_ITEM_ID,
+  WATER_EXTRACTOR_RATE, OIL_EXTRACTOR_RATES, NITROGEN_EXTRACTOR_RATES,
+  MINER_BASE_RATES, PURITY_MULTIPLIERS,
+} from '../utils/mining';
 import type { FactoryConfig, SavedFactory } from '../types/factory';
 import type { Item, Recipe, Building, Generator } from '../types/gameData';
 import { solveProdution } from '../api/solver';
 import { fetchItems, fetchRecipes, fetchBuildings, fetchGenerators } from '../api/gameData';
 import { useToastStore } from './useToastStore';
+import { computeBalancedClock, isCountUnbalanced } from '../utils/autoBalance';
 
 export interface NodeOverride {
   clockSpeed: number;   // 1–250, default matches global
@@ -70,6 +76,13 @@ interface FactoryStore {
   setOptimizationGoal: (goal: OptimizationGoal) => void;
   toggleOptimizationTargetResource: (itemId: string) => void;
   setOptimizationTargetResources: (itemIds: string[]) => void;
+  hasUnbalancedNodes: () => boolean;
+  autoBalance: boolean;
+  setAutoBalance: (v: boolean) => void;
+  autoBalanceRespectClock: boolean;
+  setAutoBalanceRespectClock: (v: boolean) => void;
+  freeWater: boolean;
+  setFreeWater: (v: boolean) => void;
 
   // Guest mode (view-only shared factory)
   isGuestMode: boolean;
@@ -94,6 +107,7 @@ interface FactoryStore {
   setAllowedRecipes: (recipeIds: string[]) => void;
   updateSettings: (settings: Partial<GameSettings>) => void;
   solve: () => Promise<void>;
+  autoBalanceAll: () => void;
   loadFactory: (id: string, name: string, config: FactoryConfig) => void;
   clearFactory: () => void;
 }
@@ -129,7 +143,7 @@ export const useFactoryStore = create<FactoryStore>((set, get) => ({
   selectedNodeId: null,
   setSelectedNodeId: (id) => set({ selectedNodeId: id }),
 
-  defaultMinerLevel: 3,
+  defaultMinerLevel: 1,
   setDefaultMinerLevel: (level) => set({ defaultMinerLevel: level }),
   inputNodePurities: {},
   setInputNodePurity: (nodeId, purity) =>
@@ -162,6 +176,47 @@ export const useFactoryStore = create<FactoryStore>((set, get) => ({
       };
     }),
   setDisabledRecipes: (recipeIds) => set({ disabledRecipes: recipeIds }),
+
+  hasUnbalancedNodes: () => {
+    const { solveResult, settings, nodeOverrides, inputNodePurities, defaultMinerLevel, autoBalanceRespectClock } = get();
+    if (!solveResult) return false;
+    const globalClockSpeed = settings.clock_speed;
+    for (const node of solveResult.nodes) {
+      if (node.node_type === 'recipe') {
+        const nodeClockSpeed = nodeOverrides[node.id]?.clockSpeed ?? globalClockSpeed;
+        const referenceCount = autoBalanceRespectClock
+          ? node.building_count / (nodeClockSpeed / globalClockSpeed)
+          : node.building_count;
+        if (isCountUnbalanced(referenceCount)) return true;
+      } else if (node.node_type === 'resource' || node.node_type === 'input') {
+        const rate = node.outputs[0]?.rate_per_minute ?? 0;
+        if (rate <= 0) continue;
+        const isWater = node.item_id === WATER_ITEM_ID;
+        const isOil = node.item_id === OIL_ITEM_ID;
+        const isNitrogen = node.item_id === NITROGEN_ITEM_ID;
+        const defaultClockSpeed = isWater ? globalClockSpeed : 100;
+        const nodeClockSpeed = nodeOverrides[node.id]?.clockSpeed ?? defaultClockSpeed;
+        const purity = inputNodePurities[node.id] ?? 'normal';
+        const ratePerMachineAt100 = isWater
+          ? WATER_EXTRACTOR_RATE
+          : isOil
+          ? OIL_EXTRACTOR_RATES[purity]
+          : isNitrogen
+          ? NITROGEN_EXTRACTOR_RATES[purity]
+          : MINER_BASE_RATES[defaultMinerLevel] * PURITY_MULTIPLIERS[purity];
+        const referenceClock = autoBalanceRespectClock ? nodeClockSpeed : defaultClockSpeed;
+        const referenceCount = rate / (ratePerMachineAt100 * (referenceClock / 100));
+        if (isCountUnbalanced(referenceCount)) return true;
+      }
+    }
+    return false;
+  },
+  autoBalance: true,
+  setAutoBalance: (v) => set({ autoBalance: v }),
+  autoBalanceRespectClock: false,
+  setAutoBalanceRespectClock: (v) => set({ autoBalanceRespectClock: v }),
+  freeWater: true,
+  setFreeWater: (v) => set({ freeWater: v }),
 
   optimizationGoal: 'minimize_resources',
   optimizationTargetResources: [],
@@ -269,7 +324,7 @@ export const useFactoryStore = create<FactoryStore>((set, get) => ({
     })),
 
   solve: async () => {
-    const { targets, providedInputs, allowedRecipes, settings, nodeOverrides, mode, powerConfig, resourceConstraints, disabledRecipes, optimizationGoal, optimizationTargetResources, defaultMinerLevel } = get();
+    const { targets, providedInputs, allowedRecipes, settings, nodeOverrides, mode, powerConfig, resourceConstraints, disabledRecipes, optimizationGoal, optimizationTargetResources, defaultMinerLevel, freeWater } = get();
     if (mode === 'production' && targets.length === 0) return;
     if (mode === 'power' && (!powerConfig || powerConfig.target_mw <= 0)) return;
 
@@ -299,8 +354,10 @@ export const useFactoryStore = create<FactoryStore>((set, get) => ({
         ...(optimizationGoal === 'minimize_specific_resources' && optimizationTargetResources.length > 0
           ? { optimization_target_resources: optimizationTargetResources }
           : {}),
+        ...(freeWater ? { free_water: true } : {}),
       });
       set({ solveResult: result, solving: false });
+      if (get().autoBalance) get().autoBalanceAll();
       useToastStore.getState().addToast(
         'success',
         `Solved: ${result.nodes.length} nodes, ${result.edges.length} connections`
@@ -328,11 +385,14 @@ export const useFactoryStore = create<FactoryStore>((set, get) => ({
       powerConfig: config.power_config ?? null,
       optimizationGoal: config.optimization_goal ?? 'minimize_resources',
       optimizationTargetResources: config.optimization_target_resources ?? [],
+      autoBalance: config.auto_balance ?? true,
+      autoBalanceRespectClock: config.auto_balance_respect_clock ?? false,
+      freeWater: config.free_water ?? true,
       resourceConstraints: config.resource_constraints ?? [],
       disabledRecipes: config.disabled_recipes ?? [],
       nodeOverrides: config.node_overrides ?? {},
       inputNodePurities: config.input_node_purities ?? {},
-      defaultMinerLevel: config.default_miner_level ?? 3,
+      defaultMinerLevel: config.default_miner_level ?? 1,
       solveResult: null,
       solveError: null,
       selectedNodeId: null,
@@ -356,11 +416,14 @@ export const useFactoryStore = create<FactoryStore>((set, get) => ({
       powerConfig: config.power_config ?? null,
       optimizationGoal: config.optimization_goal ?? 'minimize_resources',
       optimizationTargetResources: config.optimization_target_resources ?? [],
+      autoBalance: config.auto_balance ?? true,
+      autoBalanceRespectClock: config.auto_balance_respect_clock ?? false,
+      freeWater: config.free_water ?? true,
       resourceConstraints: config.resource_constraints ?? [],
       disabledRecipes: config.disabled_recipes ?? [],
       nodeOverrides: config.node_overrides ?? {},
       inputNodePurities: config.input_node_purities ?? {},
-      defaultMinerLevel: config.default_miner_level ?? 3,
+      defaultMinerLevel: config.default_miner_level ?? 1,
       solveResult: null,
       solveError: null,
       selectedNodeId: null,
@@ -379,5 +442,63 @@ export const useFactoryStore = create<FactoryStore>((set, get) => ({
       inputNodePurities: {},
     });
     useToastStore.getState().addToast('info', 'Factory cleared');
+  },
+
+  autoBalanceAll: () => {
+    const { solveResult, settings, nodeOverrides, inputNodePurities, defaultMinerLevel, autoBalanceRespectClock } = get();
+    if (!solveResult) return;
+    const globalClockSpeed = settings.clock_speed;
+    const newOverrides: Record<string, NodeOverride> = { ...nodeOverrides };
+    let count = 0;
+
+    for (const node of solveResult.nodes) {
+      if (node.node_type === 'recipe') {
+        const nodeClockSpeed = nodeOverrides[node.id]?.clockSpeed ?? globalClockSpeed;
+        const countAtNodeClock = node.building_count / (nodeClockSpeed / globalClockSpeed);
+        const c = computeBalancedClock({
+          countAtNodeClock,
+          countAtDefaultClock: node.building_count,
+          nodeClockSpeed,
+          defaultClockSpeed: globalClockSpeed,
+          respectClock: autoBalanceRespectClock,
+        });
+        if (c !== null) {
+          newOverrides[node.id] = { ...(newOverrides[node.id] ?? { somersloop: false }), clockSpeed: c };
+          count++;
+        }
+      } else if (node.node_type === 'resource' || node.node_type === 'input') {
+        const rate = node.outputs[0]?.rate_per_minute ?? 0;
+        if (rate <= 0) continue;
+        const isWater = node.item_id === WATER_ITEM_ID;
+        const isOil = node.item_id === OIL_ITEM_ID;
+        const isNitrogen = node.item_id === NITROGEN_ITEM_ID;
+        const defaultClockSpeed = isWater ? globalClockSpeed : 100;
+        const nodeClockSpeed = nodeOverrides[node.id]?.clockSpeed ?? defaultClockSpeed;
+        const purity = inputNodePurities[node.id] ?? 'normal';
+        const ratePerMachineAt100 = isWater
+          ? WATER_EXTRACTOR_RATE
+          : isOil
+          ? OIL_EXTRACTOR_RATES[purity]
+          : isNitrogen
+          ? NITROGEN_EXTRACTOR_RATES[purity]
+          : MINER_BASE_RATES[defaultMinerLevel] * PURITY_MULTIPLIERS[purity];
+        const c = computeBalancedClock({
+          countAtNodeClock: rate / (ratePerMachineAt100 * (nodeClockSpeed / 100)),
+          countAtDefaultClock: rate / (ratePerMachineAt100 * (defaultClockSpeed / 100)),
+          nodeClockSpeed,
+          defaultClockSpeed,
+          respectClock: autoBalanceRespectClock,
+        });
+        if (c !== null) {
+          newOverrides[node.id] = { ...(newOverrides[node.id] ?? { somersloop: false }), clockSpeed: c };
+          count++;
+        }
+      }
+    }
+
+    set({ nodeOverrides: newOverrides });
+    if (count > 0) {
+      useToastStore.getState().addToast('info', `Balanced ${count} node${count === 1 ? '' : 's'}`);
+    }
   },
 }));

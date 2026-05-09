@@ -3,7 +3,10 @@ import { Handle, Position } from '@xyflow/react';
 import type { ProductionNode } from '../../types/solver';
 import { formatRate, formatPower, formatCount } from '../../utils/formatting';
 import { useFactoryStore } from '../../stores/useFactoryStore';
+import { getNodeMergers } from '../../utils/mergerInfo';
+import { computeBalancedClock } from '../../utils/autoBalance';
 import { Tooltip } from '../Tooltip';
+import { PriorityMergerBadge, MergerInputRow } from './PriorityMerger';
 
 /**
  * Clock speed is a display-only override — it shows how many machines would
@@ -36,6 +39,10 @@ export function RecipeNode({ data }: { data: ProductionNode }) {
   const resetNodeOverride = useFactoryStore((s) => s.resetNodeOverride);
   const solve = useFactoryStore((s) => s.solve);
   const isGuestMode = useFactoryStore((s) => s.isGuestMode);
+  const solveResult = useFactoryStore((s) => s.solveResult);
+  const autoBalanceRespectClock = useFactoryStore((s) => s.autoBalanceRespectClock);
+
+  const mergers = getNodeMergers(data.id, solveResult);
 
   const nodeClockSpeed = override?.clockSpeed ?? globalClockSpeed;
   const somersloop = override?.somersloop ?? false;
@@ -50,12 +57,13 @@ export function RecipeNode({ data }: { data: ProductionNode }) {
     }
   }, [data.id, setNodeOverride]);
 
-  const balancedClock = (() => {
-    const n = Math.ceil(buildingCount - 0.001); // snap floating-point near-integers down
-    if (n === 0 || Math.abs(buildingCount - n) < 0.001) return null;
-    const c = Math.ceil((buildingCount / n) * nodeClockSpeed * 10000) / 10000;
-    return c >= 1 && c <= 250 ? c : null;
-  })();
+  const balancedClock = computeBalancedClock({
+    countAtNodeClock: buildingCount,
+    countAtDefaultClock: data.building_count,
+    nodeClockSpeed,
+    defaultClockSpeed: globalClockSpeed,
+    respectClock: autoBalanceRespectClock,
+  });
 
   const toggleSomersloop = useCallback(() => {
     setNodeOverride(data.id, { somersloop: !somersloop });
@@ -91,6 +99,7 @@ export function RecipeNode({ data }: { data: ProductionNode }) {
             </span>
           </div>
           <div className="flex items-center gap-1">
+            {mergers.size > 0 && <PriorityMergerBadge count={mergers.size} />}
             {somersloop && (
               <span className="text-purple-400 text-[8px] font-industrial uppercase tracking-wider border border-purple-500/40 px-1">
                 SLOOP
@@ -115,12 +124,18 @@ export function RecipeNode({ data }: { data: ProductionNode }) {
                 <div className="text-satisfactory-muted text-[9px] uppercase tracking-[0.15em] font-industrial mb-0.5 flex items-center gap-1">
                   <span className="text-indicator-amber">{'>'}</span> INPUT
                 </div>
-                {data.inputs.map((input) => (
-                  <div key={input.item_id} className="text-[10px] text-satisfactory-text flex justify-between gap-2 py-px">
-                    <span className="truncate">{input.item_name}</span>
-                    <span className="text-satisfactory-muted whitespace-nowrap">{formatRate(input.rate_per_minute)}</span>
-                  </div>
-                ))}
+                {data.inputs.map((input) => {
+                  const merger = mergers.get(input.item_id);
+                  if (merger) {
+                    return <MergerInputRow key={input.item_id} info={merger} variant="recipe" />;
+                  }
+                  return (
+                    <div key={input.item_id} className="text-[10px] text-satisfactory-text flex justify-between gap-2 py-px">
+                      <span className="truncate">{input.item_name}</span>
+                      <span className="text-satisfactory-muted whitespace-nowrap">{formatRate(input.rate_per_minute)}</span>
+                    </div>
+                  );
+                })}
               </div>
             )}
 
@@ -139,15 +154,25 @@ export function RecipeNode({ data }: { data: ProductionNode }) {
             )}
           </div>
 
-          {/* Power readout */}
-          <Tooltip text="Power draw for this production step. Scales nonlinearly with clock speed (exponent ~1.32).">
-            <div className="mt-2 pt-1.5 border-t border-satisfactory-border/30 flex items-center justify-between">
-              <span className="text-[9px] text-satisfactory-muted uppercase tracking-wider">PWR</span>
-            <span className={`text-[10px] ${hasOverride ? 'text-satisfactory-orange' : 'text-satisfactory-orange/80'}`}>
-              {formatPower(power)}
-            </span>
+          {/* Power / clock readout */}
+          <div className="mt-2 pt-1.5 border-t border-satisfactory-border/30 flex items-center justify-between">
+            <Tooltip text="Power draw for this production step. Scales nonlinearly with clock speed (exponent ≈1.32).">
+              <div className="flex items-center gap-1.5">
+                <span className="text-[9px] text-satisfactory-muted uppercase tracking-wider">PWR</span>
+                <span className={`text-[10px] ${hasOverride ? 'text-satisfactory-orange' : 'text-satisfactory-orange/80'}`}>
+                  {formatPower(power)}
+                </span>
+              </div>
+            </Tooltip>
+            <Tooltip text="Active clock speed for this node. Overrides the global default when set individually.">
+              <div className="flex items-center gap-1.5">
+                <span className="text-[9px] text-satisfactory-muted uppercase tracking-wider">CLK</span>
+                <span className={`text-[10px] tabular-nums text-right ${hasOverride ? 'text-satisfactory-orange' : 'text-satisfactory-orange/80'}`}>
+                  {nodeClockSpeed.toFixed(4)}%
+                </span>
+              </div>
+            </Tooltip>
           </div>
-          </Tooltip>
 
           {/* Panel latch / expand toggle and tuning panel — hidden in guest mode */}
           {!isGuestMode && (

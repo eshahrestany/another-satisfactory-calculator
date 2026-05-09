@@ -38,6 +38,7 @@ export function SummaryPanel() {
   const [collapsed, setCollapsed] = useState(false);
   const solveResult = useFactoryStore((s) => s.solveResult);
   const nodeOverrides = useFactoryStore((s) => s.nodeOverrides);
+
   const globalClockSpeed = useFactoryStore((s) => s.settings.clock_speed);
   const powerMultiplier = useFactoryStore((s) => s.settings.power_consumption_multiplier);
   const defaultMinerLevel = useFactoryStore((s) => s.defaultMinerLevel);
@@ -67,25 +68,25 @@ export function SummaryPanel() {
 
     if (override?.somersloop) {
       const slotsPerBuilding = getSomersloopSlots(node.building_id);
-      totalSomersloops += Math.ceil(buildingCount) * slotsPerBuilding;
+      totalSomersloops += Math.ceil(buildingCount - 0.001) * slotsPerBuilding;
     }
 
     totalPower += power;
     totalBuildings += buildingCount;
-    totalBuildingsPhysical += Math.ceil(buildingCount);
+    totalBuildingsPhysical += Math.ceil(buildingCount - 0.001);
 
     if (node.building_id && node.building_name) {
       const existing = buildingsByType.get(node.building_id);
       if (existing) {
         existing.count += buildingCount;
-        existing.physicalCount += Math.ceil(buildingCount);
+        existing.physicalCount += Math.ceil(buildingCount - 0.001);
         existing.power_mw += power;
       } else {
         buildingsByType.set(node.building_id, {
           building_id: node.building_id,
           building_name: node.building_name,
           count: buildingCount,
-          physicalCount: Math.ceil(buildingCount),
+          physicalCount: Math.ceil(buildingCount - 0.001),
           power_mw: power,
         });
       }
@@ -227,11 +228,11 @@ export function SummaryPanel() {
               </span>
             </div>
           </Tooltip>
-          {[...buildingsByType.values()].map((b) => (
+          {[...buildingsByType.values()].sort((a, b) => b.power_mw - a.power_mw).map((b) => (
             <div key={b.building_id} className="text-satisfactory-muted text-[10px] flex justify-between gap-3">
               <span>
                 {b.building_name}{' '}
-                {b.physicalCount === Math.round(b.count)
+                {b.physicalCount === Math.ceil(b.count - 0.001)
                   ? `x${b.physicalCount}`
                   : `x${b.count.toFixed(2)} (${b.physicalCount})`}
               </span>
@@ -250,7 +251,7 @@ export function SummaryPanel() {
               <span className="text-green-400">&#x25C6;</span> Raw Resources
             </div>
           </Tooltip>
-          {summary.raw_resources.map((r) => (
+          {[...summary.raw_resources].sort((a, b) => b.rate_per_minute - a.rate_per_minute).map((r) => (
             <div key={r.item_id} className="text-satisfactory-text text-[10px] flex justify-between gap-3 py-px">
               <span>{r.item_name}</span>
               <span className="text-green-300">{formatRate(r.rate_per_minute)}/min</span>
@@ -269,7 +270,7 @@ export function SummaryPanel() {
             </div>
           </Tooltip>
           <div className="industrial-inset px-3 py-1.5">
-            {totalBuildingsPhysical === Math.round(totalBuildings) ? (
+            {totalBuildingsPhysical === Math.ceil(totalBuildings - 0.001) ? (
               <span className="text-white text-sm font-industrial font-bold">{totalBuildingsPhysical}</span>
             ) : (
               <>

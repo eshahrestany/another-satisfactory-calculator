@@ -25,7 +25,7 @@ export function formatPower(mw: number): string {
 
 
 export function formatCount(count: number): string {
-  const rounded = Math.ceil(count);
+  const rounded = Math.ceil(count - 0.001); // snap floating-point noise near whole numbers
   if (Math.abs(count - rounded) < 0.001) return `${rounded}`;
   return `${count.toFixed(2)} (${rounded})`;
 }

@@ -27,7 +27,7 @@ export function ResourceConstraintPanel() {
   );
 
   const handleSelect = (itemId: string) => {
-    addResourceConstraint(itemId, 120);
+    addResourceConstraint(itemId, 0);
     setSearch('');
     setShowDropdown(false);
   };

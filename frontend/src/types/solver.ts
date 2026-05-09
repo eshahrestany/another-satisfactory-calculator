@@ -38,6 +38,8 @@ export interface SolveRequest {
   optimization_target_resources?: string[];
   /** Miner level (1–3) used to estimate extractor power for MinimizePower. Defaults to 2. */
   miner_level?: number;
+  /** When true, water is excluded from the objective so the solver uses it freely. */
+  free_water?: boolean;
 }
 
 export interface ItemRate {
@@ -60,6 +62,8 @@ export interface PowerModeConfig {
   fuel_id: string;
   target_mw: number;
   nuclear_chain?: NuclearChain;
+  /** When true, target_mw is a net power target (after subtracting factory consumption). */
+  net_power?: boolean;
 }
 
 export type NodeType = 'recipe' | 'resource' | 'output' | 'input' | 'generator';
@@ -86,6 +90,9 @@ export interface ProductionEdge {
   item_id: string;
   item_name: string;
   rate_per_minute: number;
+  /** When set, this edge is one of multiple sources for the same item at the
+   * target node. 1 = highest contribution. Absent for single-source edges. */
+  merge_priority?: number | null;
 }
 
 export interface ProductionSummary {

@@ -17,6 +17,11 @@ export interface FactoryConfig {
   power_config?: PowerModeConfig;
   optimization_goal?: OptimizationGoal;
   optimization_target_resources?: string[];
+  auto_balance?: boolean;
+  /** When true, balance based on each node's current clock; when false (default),
+   * balance as if every node were at its default clock speed. */
+  auto_balance_respect_clock?: boolean;
+  free_water?: boolean;
   resource_constraints?: ResourceConstraint[];
   disabled_recipes?: string[];
   node_overrides?: Record<string, NodeOverride>;

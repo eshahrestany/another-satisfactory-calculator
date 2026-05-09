@@ -267,19 +267,59 @@ pub fn solve(game_data: &GameData, request: &SolveRequest) -> Result<SolveRespon
     // non-deterministically reports Infeasible even when a valid solution exists
     // via a completely different recipe path. Removing these dead recipes before
     // building the LP eliminates the degeneracy entirely.
+    //
+    // Resources capped to exactly 0 via resource_constraints are treated as
+    // unavailable so that recipes which depend on them (transitively) are also
+    // pruned. Without this, a SAM=0 cap still leaves Reanimated SAM and all
+    // downstream recipes in the LP; those recipes can never run but the
+    // force-zero constraints for nuclear-chain intermediates see them as valid
+    // "consumers", which cascades into blocking even the uranium generators.
     {
-        let resource_set: std::collections::HashSet<&str> = resource_items.iter().copied().collect();
+        let zero_capped: std::collections::HashSet<&str> = request
+            .resource_constraints
+            .iter()
+            .filter(|c| c.max_rate_per_minute <= 0.0)
+            .map(|c| c.item_id.as_str())
+            .collect();
+
+        let resource_set: std::collections::HashSet<&str> = resource_items
+            .iter()
+            .copied()
+            .filter(|&id| !zero_capped.contains(id))
+            .collect();
+
+        if !zero_capped.is_empty() {
+            tracing::debug!(
+                "Pre-prune: treating {} zero-capped resource(s) as unavailable: {:?}",
+                zero_capped.len(),
+                zero_capped
+            );
+        }
+
         let input_set: std::collections::HashSet<&str> =
             request.provided_inputs.iter().map(|p| p.item_id.as_str()).collect();
 
         loop {
-            // Build the set of items any current recipe can produce, plus raw resources and inputs.
+            // Forward-reachability: only mark an item as produceable once every
+            // ingredient of some recipe that makes it is itself already produceable.
+            // This prevents circular-dependency pairs (e.g. DarkEnergy ↔
+            // DarkMatterCrystal) from keeping each other alive: they form a cycle
+            // with no raw-resource entry point, so neither ever becomes reachable.
+            // The previous approach (add ALL products of allowed recipes up-front)
+            // let such cycles survive pruning indefinitely.
             let mut produceable: std::collections::HashSet<&str> = resource_set.clone();
             produceable.extend(input_set.iter().copied());
-            // Virtual generator recipes produce __power_mw which is fine to leave in.
-            for r in &allowed_recipes {
-                for product in &r.products {
-                    produceable.insert(product.item_id.as_str());
+            loop {
+                let fp_before = produceable.len();
+                for r in &allowed_recipes {
+                    if r.ingredients.iter().all(|ing| produceable.contains(ing.item_id.as_str())) {
+                        for product in &r.products {
+                            produceable.insert(product.item_id.as_str());
+                        }
+                    }
+                }
+                if produceable.len() == fp_before {
+                    break;
                 }
             }
 
@@ -466,8 +506,9 @@ pub fn solve(game_data: &GameData, request: &SolveRequest) -> Result<SolveRespon
     //   MinimizeSpecific   → tiebreak: fewer remaining resources
 
     let sum_all_extractions = |vars: &HashMap<String, good_lp::Variable>| -> Expression {
-        vars.values()
-            .fold(Expression::from(0.0), |acc, &v| acc + v)
+        vars.iter()
+            .filter(|(id, _)| !(request.free_water && id.as_str() == "Desc_Water_C"))
+            .fold(Expression::from(0.0), |acc, (_, &v)| acc + v)
     };
 
     let sum_production_vars = || -> Expression {
@@ -574,11 +615,14 @@ pub fn solve(game_data: &GameData, request: &SolveRequest) -> Result<SolveRespon
 
     let mut solver = problem.minimise(objective).using(default_solver);
 
-    // Build effective targets: in power mode, target __power_mw; otherwise use request targets
+    // Build effective targets: in power mode, target __power_mw; otherwise use request targets.
+    // In net mode the __power_mw balance target is 0 (trivially satisfied); the actual
+    // net constraint is added as a separate LP constraint below.
     let effective_targets: Vec<ProductionTarget> = if let Some(ref power_config) = request.power_mode {
+        let gross_target = if power_config.net_power { 0.0 } else { power_config.target_mw };
         vec![ProductionTarget {
             item_id: POWER_ITEM_ID.to_string(),
-            rate_per_minute: power_config.target_mw,
+            rate_per_minute: gross_target,
         }]
     } else {
         request.targets.clone()
@@ -668,29 +712,62 @@ pub fn solve(game_data: &GameData, request: &SolveRequest) -> Result<SolveRespon
         // Must meet target demand
         let target_rate = target_map.get(item_id.as_str()).copied().unwrap_or(0.0);
 
-        // Nuclear chain waste constraints: force waste to be fully consumed
-        // so the solver is required to recycle it into downstream fuel rods.
+        // Nuclear chain waste constraints: force intermediates to be fully consumed
+        // so the solver is required to recycle waste all the way through the chain.
+        //
+        // Without these, the LP optimizer avoids the expensive Ficsonium sub-chain
+        // by outputting intermediate products (e.g. Plutonium Pellets) instead of
+        // continuing to burn Plutonium Fuel Rods and triggering the Ficsonium loop.
+        //
         // balance == 0 means: balance >= 0 AND balance <= 0
         let force_zero = if let Some(ref power_config) = request.power_mode {
             match &power_config.nuclear_chain {
                 Some(NuclearChain::RecycleToPlutonium) => item_id == "Desc_NuclearWaste_C",
-                Some(NuclearChain::FullFicsonium) => {
-                    item_id == "Desc_NuclearWaste_C" || item_id == "Desc_PlutoniumWaste_C"
-                }
+                Some(NuclearChain::FullFicsonium) => matches!(
+                    item_id.as_str(),
+                    // Uranium sub-chain
+                    "Desc_NuclearWaste_C"
+                    | "Desc_NonFissibleUranium_C"
+                    | "Desc_PlutoniumPellet_C"
+                    | "Desc_PlutoniumCell_C"
+                    | "Desc_PlutoniumFuelRod_C"
+                    // Plutonium → Ficsonium sub-chain
+                    | "Desc_PlutoniumWaste_C"
+                    | "Desc_Ficsonium_C"
+                    | "Desc_FicsoniumFuelRod_C"
+                ),
                 _ => false,
             }
         } else {
             false
         };
 
-        if target_rate > 0.0 || force_zero {
+        // A force_zero upper-bound (balance ≤ 0) is only safe when at least one
+        // recipe in the current pruned set can actually consume the item.  If the
+        // downstream consumer was pruned (e.g. Ficsonium recipe removed because
+        // Dark Energy requires SAM which is capped to 0), applying balance ≤ 0
+        // would block all upstream generators that produce the waste as a
+        // by-product, cascading into a spurious infeasibility.
+        let has_recipe_consumer = recipe_rates
+            .iter()
+            .any(|r| r.consumption.contains_key(item_id.as_str()));
+        let effective_force_zero = force_zero && has_recipe_consumer;
+
+        if effective_force_zero != force_zero {
+            tracing::debug!(
+                "  force_zero released for '{}' — no consumer in pruned recipe set",
+                item_id
+            );
+        }
+
+        if target_rate > 0.0 || effective_force_zero {
             tracing::debug!(
                 "  Constraint for '{}': target={}/min, producers=[{}], consumers=[{}]{}",
                 item_id,
                 target_rate,
                 producers.join("; "),
                 consumers.join("; "),
-                if force_zero { " [FORCE=0]" } else { "" }
+                if effective_force_zero { " [FORCE=0]" } else { "" }
             );
         } else {
             tracing::debug!(
@@ -701,7 +778,7 @@ pub fn solve(game_data: &GameData, request: &SolveRequest) -> Result<SolveRespon
             );
         }
 
-        if force_zero {
+        if effective_force_zero {
             // balance == 0: all waste produced must be consumed
             solver = solver.with(constraint!(balance.clone() >= target_rate));
             solver = solver.with(constraint!(balance <= 0.0));
@@ -713,6 +790,54 @@ pub fn solve(game_data: &GameData, request: &SolveRequest) -> Result<SolveRespon
     }
 
     tracing::debug!("LP built: {} constraints total", constraint_count);
+
+    // Net power constraint: generator output minus all factory power consumption >= target_net.
+    // Only added in power mode with net_power=true; gross mode uses the __power_mw balance above.
+    if let Some(ref power_config) = request.power_mode {
+        if power_config.net_power {
+            tracing::debug!(
+                "Net power mode: adding explicit net constraint (target {:.1} MW)",
+                power_config.target_mw
+            );
+            let mut net_expr = Expression::from(0.0);
+
+            // Generator output (positive contribution)
+            for (i, _) in allowed_recipes.iter().enumerate() {
+                if let Some(&gen_power) = recipe_rates[i].production.get(POWER_ITEM_ID) {
+                    if gen_power > 0.0 {
+                        net_expr = net_expr + gen_power * recipe_vars[i];
+                    }
+                }
+            }
+
+            // Production recipe consumption (negative contribution)
+            for (i, recipe) in allowed_recipes.iter().enumerate() {
+                if !recipe.id.starts_with("__gen_") {
+                    let building = building_map.get(recipe.building_id.as_str()).copied();
+                    let coeff = recipe_power_coefficient(
+                        recipe,
+                        building,
+                        &request.settings,
+                        &request.somersloops,
+                    );
+                    if coeff > 0.0 {
+                        net_expr = net_expr - coeff * recipe_vars[i];
+                    }
+                }
+            }
+
+            // Extraction / miner power (negative contribution)
+            for (res_id, &var) in &extract_vars {
+                if let Some(&coeff) = extraction_power_coeffs.get(res_id) {
+                    if coeff > 0.0 {
+                        net_expr = net_expr - coeff * var;
+                    }
+                }
+            }
+
+            solver = solver.with(constraint!(net_expr >= power_config.target_mw));
+        }
+    }
 
     // Solve
     tracing::debug!("Calling LP solver...");
@@ -1099,9 +1224,31 @@ fn build_graph(
             .push((node_id, surplus));
     }
 
-    // Build edges: connect producers to consumers for each item
+    // Build edges via greedy single-source assignment per item.
+    //
+    // For each item with multiple producers and multiple consumers, we route each
+    // consumer to a single producer when possible (best-fit-decreasing bin packing),
+    // only splitting when a consumer's demand can't fit in any producer's remaining
+    // capacity. The split consumer becomes a "priority merger" point — it draws
+    // from two (or more) sources, and we tag each of its incoming edges with a
+    // priority rank (1 = largest contribution) so the UI can label the inputs.
+    //
+    // This produces a layout that mirrors a real Satisfactory factory: belts run
+    // from one machine cluster to one downstream cluster, except at the unique
+    // spillover point where leftover capacity on one source needs to be merged
+    // with the next source.
     let mut edge_id = 0;
-    for (item_id, producers) in &item_producers {
+    let assign_eps = 1e-6_f64;
+
+    // Iterate items in sorted order so output is deterministic.
+    let mut item_ids: Vec<&String> = item_producers.keys().collect();
+    item_ids.sort();
+
+    for item_id in item_ids {
+        let producers = match item_producers.get(item_id) {
+            Some(p) => p,
+            None => continue,
+        };
         let consumers = match item_consumers.get(item_id) {
             Some(c) => c,
             None => continue,
@@ -1117,23 +1264,108 @@ fn build_graph(
             .map(|i| i.name.clone())
             .unwrap_or_else(|| item_id.clone());
 
-        for (consumer_id, consumer_rate) in consumers {
-            for (producer_id, producer_rate) in producers {
-                let share = (producer_rate / total_production) * consumer_rate;
-                if share < epsilon {
-                    continue;
-                }
+        // Sort producers by capacity desc (id tiebreak) and consumers by demand
+        // desc (id tiebreak). Largest-first is the FFD/BFD heuristic that
+        // minimizes the number of items spanning two bins.
+        let mut sorted_producers: Vec<(String, f64)> = producers.clone();
+        sorted_producers.sort_by(|a, b| {
+            b.1.partial_cmp(&a.1)
+                .unwrap_or(std::cmp::Ordering::Equal)
+                .then_with(|| a.0.cmp(&b.0))
+        });
+        let mut sorted_consumers: Vec<(String, f64)> = consumers.clone();
+        sorted_consumers.sort_by(|a, b| {
+            b.1.partial_cmp(&a.1)
+                .unwrap_or(std::cmp::Ordering::Equal)
+                .then_with(|| a.0.cmp(&b.0))
+        });
 
-                edges.push(ProductionEdge {
-                    id: format!("edge-{}", edge_id),
-                    source_node_id: producer_id.clone(),
-                    target_node_id: consumer_id.clone(),
-                    item_id: item_id.clone(),
-                    item_name: item_name.clone(),
-                    rate_per_minute: share,
-                });
-                edge_id += 1;
+        let mut remaining: Vec<f64> = sorted_producers.iter().map(|(_, r)| *r).collect();
+
+        // (source, target, rate) tuples produced for this item, in assignment order.
+        let mut item_edges: Vec<(String, String, f64)> = Vec::new();
+
+        for (consumer_id, demand) in &sorted_consumers {
+            let mut needed = *demand;
+
+            while needed > assign_eps {
+                // Best-fit: pick the producer with the smallest remaining capacity
+                // that still covers the full need. Falling back to first-fit
+                // (largest remaining) when nothing fits forces a merge.
+                let best_fit = remaining
+                    .iter()
+                    .enumerate()
+                    .filter(|(_, &r)| r + assign_eps >= needed)
+                    .min_by(|a, b| a.1.partial_cmp(b.1).unwrap_or(std::cmp::Ordering::Equal))
+                    .map(|(i, _)| i);
+
+                let (idx, take) = match best_fit {
+                    Some(i) => (i, needed),
+                    None => {
+                        // No single producer can satisfy — take from the one with
+                        // most remaining and continue (this is the merge case).
+                        let (max_idx, &max_rem) = remaining
+                            .iter()
+                            .enumerate()
+                            .max_by(|a, b| {
+                                a.1.partial_cmp(b.1).unwrap_or(std::cmp::Ordering::Equal)
+                            })
+                            .unwrap_or((0, &0.0));
+                        if max_rem < assign_eps {
+                            // Production exhausted (shouldn't happen if balanced).
+                            break;
+                        }
+                        (max_idx, needed.min(max_rem))
+                    }
+                };
+
+                item_edges.push((sorted_producers[idx].0.clone(), consumer_id.clone(), take));
+                remaining[idx] -= take;
+                needed -= take;
             }
+        }
+
+        // For any consumer that received >1 incoming edge, assign priority ranks.
+        // Priority 1 = largest contribution (id tiebreak for determinism).
+        let mut merger_priority: HashMap<(String, String), u32> = HashMap::new();
+        let mut by_target: HashMap<String, Vec<(String, f64)>> = HashMap::new();
+        for (src, tgt, r) in &item_edges {
+            by_target
+                .entry(tgt.clone())
+                .or_default()
+                .push((src.clone(), *r));
+        }
+        for (target, mut sources) in by_target.into_iter() {
+            if sources.len() <= 1 {
+                continue;
+            }
+            sources.sort_by(|a, b| {
+                b.1.partial_cmp(&a.1)
+                    .unwrap_or(std::cmp::Ordering::Equal)
+                    .then_with(|| a.0.cmp(&b.0))
+            });
+            for (rank, (src, _)) in sources.iter().enumerate() {
+                merger_priority.insert((target.clone(), src.clone()), (rank as u32) + 1);
+            }
+        }
+
+        for (source, target, rate) in item_edges {
+            if rate < epsilon {
+                continue;
+            }
+            let merge_priority = merger_priority
+                .get(&(target.clone(), source.clone()))
+                .copied();
+            edges.push(ProductionEdge {
+                id: format!("edge-{}", edge_id),
+                source_node_id: source,
+                target_node_id: target,
+                item_id: item_id.clone(),
+                item_name: item_name.clone(),
+                rate_per_minute: rate,
+                merge_priority,
+            });
+            edge_id += 1;
         }
     }
 

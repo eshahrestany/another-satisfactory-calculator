@@ -1,9 +1,14 @@
 import { Handle, Position } from '@xyflow/react';
 import type { ProductionNode } from '../../types/solver';
 import { formatRate, formatPower } from '../../utils/formatting';
+import { useFactoryStore } from '../../stores/useFactoryStore';
+import { getNodeMergers } from '../../utils/mergerInfo';
 import { Tooltip } from '../Tooltip';
+import { PriorityMergerBadge, MergerInputRow } from './PriorityMerger';
 
 export function GeneratorNode({ data }: { data: ProductionNode }) {
+  const solveResult = useFactoryStore((s) => s.solveResult);
+  const mergers = getNodeMergers(data.id, solveResult);
   return (
     <div className="node-stamp relative min-w-[220px]">
       <div
@@ -16,9 +21,10 @@ export function GeneratorNode({ data }: { data: ProductionNode }) {
           {/* Header */}
           <div className="flex items-center gap-2 mb-1.5">
             <span className="text-amber-400 text-sm">&#x26A1;</span>
-            <span className="text-amber-300 font-industrial font-bold text-xs uppercase tracking-wider">
+            <span className="text-amber-300 font-industrial font-bold text-xs uppercase tracking-wider flex-1">
               {data.building_name ?? 'Generator'}
             </span>
+            {mergers.size > 0 && <PriorityMergerBadge count={mergers.size} />}
           </div>
 
           {/* Recipe / fuel name */}
@@ -49,12 +55,18 @@ export function GeneratorNode({ data }: { data: ProductionNode }) {
           {/* Inputs (fuel, water) */}
           {data.inputs.length > 0 && (
             <div className="space-y-0.5 mb-1">
-              {data.inputs.map((input) => (
-                <div key={input.item_id} className="flex justify-between text-[10px]">
-                  <span className="text-red-300/70">{input.item_name}</span>
-                  <span className="text-satisfactory-text">{formatRate(input.rate_per_minute)}/min</span>
-                </div>
-              ))}
+              {data.inputs.map((input) => {
+                const merger = mergers.get(input.item_id);
+                if (merger) {
+                  return <MergerInputRow key={input.item_id} info={merger} variant="generator" />;
+                }
+                return (
+                  <div key={input.item_id} className="flex justify-between text-[10px]">
+                    <span className="text-red-300/70">{input.item_name}</span>
+                    <span className="text-satisfactory-text">{formatRate(input.rate_per_minute)}/min</span>
+                  </div>
+                );
+              })}
             </div>
           )}
 

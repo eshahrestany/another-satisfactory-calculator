@@ -53,6 +53,10 @@ pub struct SolveRequest {
     /// Defaults to 2 (Mk.2). Only affects MinimizePower objective and reported extraction power.
     #[serde(default = "default_miner_level")]
     pub miner_level: u8,
+    /// When true, water extraction is excluded from the objective so the solver
+    /// uses however much water is needed without trying to minimize it.
+    #[serde(default)]
+    pub free_water: bool,
 }
 
 fn default_miner_level() -> u8 {
@@ -74,6 +78,10 @@ pub struct PowerModeConfig {
     pub target_mw: f64,
     #[serde(default)]
     pub nuclear_chain: Option<NuclearChain>,
+    /// When true, `target_mw` is a net power target (generator output minus factory consumption).
+    /// When false (default), `target_mw` is a gross generator output target.
+    #[serde(default)]
+    pub net_power: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -152,6 +160,11 @@ pub struct ProductionEdge {
     pub item_id: String,
     pub item_name: String,
     pub rate_per_minute: f64,
+    /// When the target node receives this item from multiple sources, this is
+    /// the priority rank (1 = highest contribution) among those sources.
+    /// `None` when the target has a single source for this item.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub merge_priority: Option<u32>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

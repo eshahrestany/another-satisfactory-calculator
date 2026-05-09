@@ -3,6 +3,7 @@ import { Handle, Position } from '@xyflow/react';
 import type { ProductionNode } from '../../types/solver';
 import { useFactoryStore, type ResourcePurity } from '../../stores/useFactoryStore';
 import { formatRate, formatPower } from '../../utils/formatting';
+import { computeBalancedClock } from '../../utils/autoBalance';
 import { Tooltip } from '../Tooltip';
 import {
   WATER_ITEM_ID,
@@ -41,8 +42,10 @@ export function ResourceNode({ data }: { data: ProductionNode }) {
   const override = useFactoryStore((s) => s.nodeOverrides[data.id]);
   const setNodeOverride = useFactoryStore((s) => s.setNodeOverride);
   const resetNodeOverride = useFactoryStore((s) => s.resetNodeOverride);
+  const autoBalanceRespectClock = useFactoryStore((s) => s.autoBalanceRespectClock);
 
-  const nodeClockSpeed = override?.clockSpeed ?? (isWater ? globalClockSpeed : 100);
+  const defaultClockSpeed = isWater ? globalClockSpeed : 100;
+  const nodeClockSpeed = override?.clockSpeed ?? defaultClockSpeed;
   const hasOverride = override !== undefined;
 
   const isMiner = !isWater && !isOil && !isNitrogen;
@@ -72,11 +75,13 @@ export function ResourceNode({ data }: { data: ProductionNode }) {
       : isNitrogen
       ? NITROGEN_EXTRACTOR_RATES[purity]
       : MINER_BASE_RATES[defaultMinerLevel] * PURITY_MULTIPLIERS[purity];
-    const raw = rate / (ratePerMachineAt100 * (nodeClockSpeed / 100));
-    const n = Math.ceil(raw - 0.001); // snap floating-point near-integers down
-    if (n === 0 || Math.abs(raw - n) < 0.001) return null;
-    const c = Math.ceil((raw / n) * nodeClockSpeed * 10000) / 10000;
-    return c >= 1 && c <= 250 ? c : null;
+    return computeBalancedClock({
+      countAtNodeClock: rate / (ratePerMachineAt100 * (nodeClockSpeed / 100)),
+      countAtDefaultClock: rate / (ratePerMachineAt100 * (defaultClockSpeed / 100)),
+      nodeClockSpeed,
+      defaultClockSpeed,
+      respectClock: autoBalanceRespectClock,
+    });
   })();
 
   const handleClockChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
@@ -229,13 +234,25 @@ export function ResourceNode({ data }: { data: ProductionNode }) {
             </>
           )}
 
-          {/* Power readout */}
+          {/* Power / clock readout */}
           {(extractorPower !== null || oilPower !== null || minerPower !== null || nitrogenPower !== null) && (
             <div className="mt-1.5 pt-1 border-t border-satisfactory-border/30 flex items-center justify-between">
-              <span className="text-[9px] text-satisfactory-muted uppercase tracking-wider">PWR</span>
-              <span className={`text-[10px] ${hasOverride ? 'text-satisfactory-orange' : 'text-satisfactory-orange/80'}`}>
-                {formatPower((extractorPower ?? 0) + (oilPower ?? 0) + (minerPower ?? 0) + (nitrogenPower ?? 0))}
-              </span>
+              <Tooltip text="Total power draw for all extraction machinery at this node. Scales nonlinearly with clock speed (exponent ≈1.32).">
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[9px] text-satisfactory-muted uppercase tracking-wider">PWR</span>
+                  <span className={`text-[10px] ${hasOverride ? 'text-satisfactory-orange' : 'text-satisfactory-orange/80'}`}>
+                    {formatPower((extractorPower ?? 0) + (oilPower ?? 0) + (minerPower ?? 0) + (nitrogenPower ?? 0))}
+                  </span>
+                </div>
+              </Tooltip>
+              <Tooltip text="Active clock speed for this extraction node. Overrides the global default when set individually.">
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[9px] text-satisfactory-muted uppercase tracking-wider">CLK</span>
+                  <span className={`text-[10px] tabular-nums text-right ${hasOverride ? 'text-satisfactory-orange' : 'text-satisfactory-orange/80'}`}>
+                    {nodeClockSpeed.toFixed(4)}%
+                  </span>
+                </div>
+              </Tooltip>
             </div>
           )}
 

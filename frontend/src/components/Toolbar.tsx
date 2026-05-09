@@ -12,6 +12,9 @@ export function Toolbar() {
   const targets = useFactoryStore((s) => s.targets);
   const mode = useFactoryStore((s) => s.mode);
   const powerConfig = useFactoryStore((s) => s.powerConfig);
+  const solveResult = useFactoryStore((s) => s.solveResult);
+  const autoBalanceAll = useFactoryStore((s) => s.autoBalanceAll);
+  const hasUnbalanced = useFactoryStore((s) => s.hasUnbalancedNodes());
 
   return (
     <div className="relative bg-satisfactory-panel border-b-2 border-satisfactory-border px-4 py-2 flex items-center gap-3 metal-texture">
@@ -70,6 +73,16 @@ export function Toolbar() {
                 {solving ? 'Processing' : ready ? 'Ready' : 'Idle'}
               </span>
             </div>
+            {solveResult && !isGuestMode && hasUnbalanced && (
+              <Tooltip text="Set each node's clock speed to the exact value needed for a whole number of machines." side="bottom">
+                <button
+                  onClick={autoBalanceAll}
+                  className="relative border border-satisfactory-border text-satisfactory-muted font-industrial text-xs px-4 py-1.5 uppercase tracking-wider hover:border-satisfactory-orange/60 hover:text-satisfactory-orange transition-all active:translate-y-px"
+                >
+                  Balance All
+                </button>
+              </Tooltip>
+            )}
             <Tooltip text={solving ? 'Linear programming in progress. ADA requests patience.' : ready ? 'Compute optimal production layout. Also: Ctrl+Enter.' : 'No targets configured. The solver requires direction, Pioneer.'} side="bottom">
               <button
                 onClick={solve}

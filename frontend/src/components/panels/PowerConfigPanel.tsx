@@ -52,6 +52,7 @@ export function PowerConfigPanel() {
   }, [powerConfig]);
 
   const selectedGenerator = generators.find((g) => g.id === selectedGeneratorId);
+  const netPower = powerConfig?.net_power ?? false;
 
   const fuelItems = selectedGenerator
     ? selectedGenerator.fuel_items
@@ -252,7 +253,31 @@ export function PowerConfigPanel() {
           )}
 
           {/* Target Power Output */}
-          <label className="text-[9px] text-satisfactory-muted uppercase tracking-wider mb-1 block">Target Output</label>
+          <div className="flex items-center justify-between mb-1">
+            <label className="text-[9px] text-satisfactory-muted uppercase tracking-wider">Target Output</label>
+            <div className="flex">
+              <button
+                onClick={() => powerConfig && setPowerConfig({ ...powerConfig, net_power: false })}
+                className={`px-2 py-0.5 text-[9px] font-industrial uppercase tracking-wider border transition-all ${
+                  !netPower
+                    ? 'bg-amber-500/20 border-amber-500 text-amber-400'
+                    : 'bg-satisfactory-darker/50 border-satisfactory-border text-satisfactory-muted hover:text-satisfactory-text'
+                }`}
+              >
+                Gross
+              </button>
+              <button
+                onClick={() => powerConfig && setPowerConfig({ ...powerConfig, net_power: true })}
+                className={`px-2 py-0.5 text-[9px] font-industrial uppercase tracking-wider border border-l-0 transition-all ${
+                  netPower
+                    ? 'bg-amber-500/20 border-amber-500 text-amber-400'
+                    : 'bg-satisfactory-darker/50 border-satisfactory-border text-satisfactory-muted hover:text-satisfactory-text'
+                }`}
+              >
+                Net
+              </button>
+            </div>
+          </div>
           <div className="flex gap-0 mb-3">
             <input
               type="number"

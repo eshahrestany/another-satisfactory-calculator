@@ -18,6 +18,7 @@ import { ResourceNode } from './ResourceNode';
 import { OutputNode } from './OutputNode';
 import { InputNode } from './InputNode';
 import { GeneratorNode } from './GeneratorNode';
+import { LoopEdge } from './LoopEdge';
 import { formatRate } from '../../utils/formatting';
 
 const nodeTypes = {
@@ -26,6 +27,10 @@ const nodeTypes = {
   output: OutputNode,
   input: InputNode,
   generator: GeneratorNode,
+};
+
+const edgeTypes = {
+  loop: LoopEdge,
 };
 
 export function FactoryGraph() {
@@ -62,18 +67,92 @@ export function FactoryGraph() {
 
     const maxRate = Math.max(...solveResult.edges.map((e) => e.rate_per_minute), 1);
 
+    // Group edges by unordered (source, target) pair so we can spread overlapping ones.
+    const pairGroups = new Map<string, { id: string; reverse: boolean }[]>();
+    for (const e of solveResult.edges) {
+      const [a, b] = [e.source_node_id, e.target_node_id].sort();
+      const key = `${a}|${b}`;
+      if (!pairGroups.has(key)) pairGroups.set(key, []);
+      pairGroups.get(key)!.push({ id: e.id, reverse: e.source_node_id !== a });
+    }
+
+    // For each edge in a pair-group with 2+ members, compute an (offset, sign)
+    // that bows the curve up or down relative to the source-target baseline.
+    // Canonical edges get sign=+1 (curve below), reverse edges get sign=-1
+    // (curve above) so opposing edges between the same pair don't overlap.
+    const offsetByEdgeId = new Map<string, { magnitude: number; sign: number }>();
+    for (const items of pairGroups.values()) {
+      if (items.length < 2) continue;
+      const canonical = items.filter((i) => !i.reverse);
+      const reverse = items.filter((i) => i.reverse);
+      const assignSlots = (group: { id: string }[], sign: number) => {
+        const n = group.length;
+        group.forEach((g, i) => {
+          // Slot 1, 2, 3... → progressively larger offsets so the curves stack
+          // visually instead of overlapping.
+          const slot = n === 1 ? 1 : i + 1;
+          offsetByEdgeId.set(g.id, { magnitude: 30 * slot, sign });
+        });
+      };
+      assignSlots(canonical, 1);
+      assignSlots(reverse, -1);
+    }
+
+    // Priority-merger spreading: edges converging at the same (target, item)
+    // come from different sources, so they aren't in the same pair-group and
+    // would otherwise render as overlapping default-bezier belts. Fan them
+    // out by priority rank — P1 below baseline, P2 above, P3 farther below…
+    // so the item-rate labels don't sit on top of each other at the merger
+    // point. Skip edges that already received a pair-group offset (e.g. they
+    // form an A↔B loop with the same partner).
+    const mergerGroups = new Map<string, typeof solveResult.edges>();
+    for (const e of solveResult.edges) {
+      if (e.merge_priority == null) continue;
+      const key = `${e.target_node_id}|${e.item_id}`;
+      const arr = mergerGroups.get(key) ?? [];
+      arr.push(e);
+      mergerGroups.set(key, arr);
+    }
+    for (const group of mergerGroups.values()) {
+      if (group.length < 2) continue;
+      const sorted = [...group].sort(
+        (a, b) => (a.merge_priority ?? 0) - (b.merge_priority ?? 0),
+      );
+      sorted.forEach((e, i) => {
+        if (offsetByEdgeId.has(e.id)) return;
+        const layer = Math.floor(i / 2) + 1;
+        // Alternate sides so the fan is roughly symmetric about the baseline.
+        const sign = i % 2 === 0 ? 1 : -1;
+        offsetByEdgeId.set(e.id, { magnitude: 30 * layer, sign });
+      });
+    }
+
     const rfEdges: Edge[] = solveResult.edges.map((e) => {
       const ratio = e.rate_per_minute / maxRate;
       const strokeWidth = 1.5 + ratio * 4;
+      const offset = offsetByEdgeId.get(e.id);
+      const isLoop = offset !== undefined;
+      const isMerger = e.merge_priority != null;
+      const priorityPrefix = isMerger ? `[P${e.merge_priority}] ` : '';
+      // Cyan for merger edges so they stand out from the orange single-source belts.
+      const stroke = isMerger ? '#22d3ee' : '#e8a630';
       return {
         id: e.id,
         source: e.source_node_id,
         target: e.target_node_id,
-        label: `${e.item_name}: ${formatRate(e.rate_per_minute)}/min`,
-        style: { stroke: '#e8a630', strokeWidth },
+        label: `${priorityPrefix}${e.item_name}: ${formatRate(e.rate_per_minute)}/min`,
+        style: { stroke, strokeWidth },
         labelStyle: { fill: '#e0e0e0', fontSize: 10, fontFamily: '"JetBrains Mono", monospace' },
-        labelBgStyle: { fill: '#1a1a2e', fillOpacity: 0.95, stroke: '#3a3a5c', strokeWidth: 1 },
+        labelBgStyle: {
+          fill: isMerger ? '#0e2530' : '#1a1a2e',
+          fillOpacity: 0.95,
+          stroke: isMerger ? '#22d3ee' : '#3a3a5c',
+          strokeWidth: 1,
+        },
         labelBgPadding: [6, 3] as [number, number],
+        ...(isLoop
+          ? { type: 'loop', data: { sign: offset.sign, magnitude: offset.magnitude } }
+          : {}),
       };
     });
 
@@ -122,11 +201,14 @@ export function FactoryGraph() {
         const srcEdge = solveResult.edges.find((e) => e.id === edge.id);
         const ratio = srcEdge ? srcEdge.rate_per_minute / maxRate : 0.5;
         const strokeWidth = 1.5 + ratio * 4;
+        const isMerger = srcEdge?.merge_priority != null;
+        const baseStroke = isMerger ? '#22d3ee' : '#e8a630';
+        const highlightStroke = isMerger ? '#67e8f9' : '#f0b840';
 
         return {
           ...edge,
           style: {
-            stroke: highlighted ? '#f0b840' : '#e8a630',
+            stroke: highlighted ? highlightStroke : baseStroke,
             strokeWidth,
             opacity: dimmed ? 0.12 : 1,
             transition: 'opacity 0.3s, stroke-width 0.3s',
@@ -138,9 +220,9 @@ export function FactoryGraph() {
             transition: 'fill 0.3s',
           },
           labelBgStyle: {
-            fill: '#1a1a2e',
+            fill: isMerger ? '#0e2530' : '#1a1a2e',
             fillOpacity: dimmed ? 0 : 0.95,
-            stroke: '#3a3a5c',
+            stroke: isMerger ? '#22d3ee' : '#3a3a5c',
             strokeWidth: dimmed ? 0 : 1,
           },
         };
@@ -220,6 +302,7 @@ export function FactoryGraph() {
         nodes={nodes}
         edges={edges}
         nodeTypes={nodeTypes}
+        edgeTypes={edgeTypes}
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
         onNodeClick={onNodeClick}

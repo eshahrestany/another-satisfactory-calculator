@@ -1,9 +1,17 @@
 import { Handle, Position } from '@xyflow/react';
 import type { ProductionNode } from '../../types/solver';
 import { formatRate } from '../../utils/formatting';
+import { useFactoryStore } from '../../stores/useFactoryStore';
+import { getNodeMergers } from '../../utils/mergerInfo';
 import { Tooltip } from '../Tooltip';
+import { PriorityMergerBadge, MergerInputRow } from './PriorityMerger';
 
 export function OutputNode({ data }: { data: ProductionNode }) {
+  const solveResult = useFactoryStore((s) => s.solveResult);
+  const mergers = getNodeMergers(data.id, solveResult);
+  const inputItemId = data.inputs[0]?.item_id;
+  const merger = inputItemId ? mergers.get(inputItemId) : undefined;
+
   return (
     <div className="node-stamp relative min-w-[190px]">
       <div
@@ -15,18 +23,23 @@ export function OutputNode({ data }: { data: ProductionNode }) {
         <div className="px-3 py-2.5">
           <div className="flex items-center gap-2 mb-1.5">
             <div className="w-2 h-2 rounded-full bg-satisfactory-orange animate-pulse-glow shadow-glow-orange" />
-            <span className="text-satisfactory-orange font-industrial font-bold text-xs uppercase tracking-wider">
+            <span className="text-satisfactory-orange font-industrial font-bold text-xs uppercase tracking-wider flex-1">
               {data.item_name}
             </span>
+            {merger && <PriorityMergerBadge count={1} />}
           </div>
-          <Tooltip text="Required output rate. Failure to meet production quotas will be noted in your file.">
-            <div className="industrial-inset px-2 py-1 flex items-center justify-between">
-              <span className="text-[9px] text-satisfactory-muted uppercase">Demand</span>
-              <span className="text-xs text-satisfactory-orange font-bold">
-                {formatRate(data.inputs[0]?.rate_per_minute ?? 0)}/min
-              </span>
-            </div>
-          </Tooltip>
+          {merger ? (
+            <MergerInputRow info={merger} variant="output" />
+          ) : (
+            <Tooltip text="Required output rate. Failure to meet production quotas will be noted in your file.">
+              <div className="industrial-inset px-2 py-1 flex items-center justify-between">
+                <span className="text-[9px] text-satisfactory-muted uppercase">Demand</span>
+                <span className="text-xs text-satisfactory-orange font-bold">
+                  {formatRate(data.inputs[0]?.rate_per_minute ?? 0)}/min
+                </span>
+              </div>
+            </Tooltip>
+          )}
         </div>
 
         {/* Rivets */}
