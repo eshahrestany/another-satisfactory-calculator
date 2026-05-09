@@ -108,7 +108,7 @@ interface FactoryStore {
   updateSettings: (settings: Partial<GameSettings>) => void;
   solve: () => Promise<void>;
   autoBalanceAll: () => void;
-  loadFactory: (id: string, name: string, config: FactoryConfig) => void;
+  loadFactory: (id: string, name: string, config: FactoryConfig) => Promise<void>;
   clearFactory: () => void;
 }
 
@@ -404,7 +404,7 @@ export const useFactoryStore = create<FactoryStore>((set, get) => ({
 
   exitGuestMode: () => set({ isGuestMode: false, shareToken: null, guestUpdatedAt: null }),
 
-  loadFactory: (id, name, config) =>
+  loadFactory: async (id, name, config) => {
     set({
       factoryId: id,
       factoryName: name,
@@ -427,7 +427,9 @@ export const useFactoryStore = create<FactoryStore>((set, get) => ({
       solveResult: null,
       solveError: null,
       selectedNodeId: null,
-    }),
+    });
+    await get().solve();
+  },
 
   clearFactory: () => {
     set({
