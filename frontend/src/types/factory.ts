@@ -22,6 +22,7 @@ export interface FactoryConfig {
    * balance as if every node were at its default clock speed. */
   auto_balance_respect_clock?: boolean;
   free_water?: boolean;
+  enable_resource_conversion?: boolean;
   resource_constraints?: ResourceConstraint[];
   disabled_recipes?: string[];
   node_overrides?: Record<string, NodeOverride>;

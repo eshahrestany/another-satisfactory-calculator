@@ -64,6 +64,7 @@ interface FactoryStore {
   addResourceConstraint: (item_id: string, max_rate_per_minute: number) => void;
   removeResourceConstraint: (index: number) => void;
   updateResourceConstraint: (index: number, constraint: ResourceConstraint) => void;
+  setResourceConstraints: (constraints: ResourceConstraint[]) => void;
 
   // Disabled default recipes
   disabledRecipes: string[];
@@ -83,6 +84,8 @@ interface FactoryStore {
   setAutoBalanceRespectClock: (v: boolean) => void;
   freeWater: boolean;
   setFreeWater: (v: boolean) => void;
+  enableResourceConversion: boolean;
+  setEnableResourceConversion: (v: boolean) => void;
 
   // Guest mode (view-only shared factory)
   isGuestMode: boolean;
@@ -164,6 +167,8 @@ export const useFactoryStore = create<FactoryStore>((set, get) => ({
     set((state) => ({
       resourceConstraints: state.resourceConstraints.map((c, i) => (i === index ? constraint : c)),
     })),
+  setResourceConstraints: (constraints) =>
+    set({ resourceConstraints: constraints }),
 
   disabledRecipes: [],
   toggleDisabledRecipe: (recipeId) =>
@@ -217,8 +222,10 @@ export const useFactoryStore = create<FactoryStore>((set, get) => ({
   setAutoBalanceRespectClock: (v) => set({ autoBalanceRespectClock: v }),
   freeWater: true,
   setFreeWater: (v) => set({ freeWater: v }),
+  enableResourceConversion: false,
+  setEnableResourceConversion: (v) => set({ enableResourceConversion: v }),
 
-  optimizationGoal: 'minimize_resources',
+  optimizationGoal: 'minimize_weighted_resources',
   optimizationTargetResources: [],
   setOptimizationGoal: (goal) => set({ optimizationGoal: goal }),
   toggleOptimizationTargetResource: (itemId) =>
@@ -324,7 +331,7 @@ export const useFactoryStore = create<FactoryStore>((set, get) => ({
     })),
 
   solve: async () => {
-    const { targets, providedInputs, allowedRecipes, settings, nodeOverrides, mode, powerConfig, resourceConstraints, disabledRecipes, optimizationGoal, optimizationTargetResources, defaultMinerLevel, freeWater } = get();
+    const { targets, providedInputs, allowedRecipes, settings, nodeOverrides, mode, powerConfig, resourceConstraints, disabledRecipes, optimizationGoal, optimizationTargetResources, defaultMinerLevel, freeWater, enableResourceConversion } = get();
     if (mode === 'production' && targets.length === 0) return;
     if (mode === 'power' && (!powerConfig || powerConfig.target_mw <= 0)) return;
 
@@ -350,11 +357,12 @@ export const useFactoryStore = create<FactoryStore>((set, get) => ({
         ...(mode === 'power' && powerConfig ? { power_mode: powerConfig } : {}),
         ...(resourceConstraints.length > 0 ? { resource_constraints: resourceConstraints } : {}),
         ...(disabledRecipes.length > 0 ? { disabled_recipes: disabledRecipes } : {}),
-        ...(optimizationGoal !== 'minimize_resources' ? { optimization_goal: optimizationGoal } : {}),
+        ...(optimizationGoal !== 'minimize_weighted_resources' ? { optimization_goal: optimizationGoal } : {}),
         ...(optimizationGoal === 'minimize_specific_resources' && optimizationTargetResources.length > 0
           ? { optimization_target_resources: optimizationTargetResources }
           : {}),
         ...(freeWater ? { free_water: true } : {}),
+        ...(enableResourceConversion ? { enable_resource_conversion: true } : {}),
       });
       set({ solveResult: result, solving: false });
       if (get().autoBalance) get().autoBalanceAll();
@@ -383,11 +391,12 @@ export const useFactoryStore = create<FactoryStore>((set, get) => ({
       allowedRecipes: config.allowed_recipes,
       settings: config.settings,
       powerConfig: config.power_config ?? null,
-      optimizationGoal: config.optimization_goal ?? 'minimize_resources',
+      optimizationGoal: config.optimization_goal ?? 'minimize_weighted_resources',
       optimizationTargetResources: config.optimization_target_resources ?? [],
       autoBalance: config.auto_balance ?? true,
       autoBalanceRespectClock: config.auto_balance_respect_clock ?? false,
       freeWater: config.free_water ?? true,
+      enableResourceConversion: config.enable_resource_conversion ?? false,
       resourceConstraints: config.resource_constraints ?? [],
       disabledRecipes: config.disabled_recipes ?? [],
       nodeOverrides: config.node_overrides ?? {},
@@ -414,11 +423,12 @@ export const useFactoryStore = create<FactoryStore>((set, get) => ({
       allowedRecipes: config.allowed_recipes,
       settings: config.settings,
       powerConfig: config.power_config ?? null,
-      optimizationGoal: config.optimization_goal ?? 'minimize_resources',
+      optimizationGoal: config.optimization_goal ?? 'minimize_weighted_resources',
       optimizationTargetResources: config.optimization_target_resources ?? [],
       autoBalance: config.auto_balance ?? true,
       autoBalanceRespectClock: config.auto_balance_respect_clock ?? false,
       freeWater: config.free_water ?? true,
+      enableResourceConversion: config.enable_resource_conversion ?? false,
       resourceConstraints: config.resource_constraints ?? [],
       disabledRecipes: config.disabled_recipes ?? [],
       nodeOverrides: config.node_overrides ?? {},

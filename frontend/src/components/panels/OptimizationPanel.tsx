@@ -28,10 +28,12 @@ function SliderLabels({ min, max, defaultLabel, defaultPct }: {
 }
 
 const GOALS: ReadonlyArray<readonly [OptimizationGoal, string, string]> = [
-  ['minimize_resources', 'Minimize Resources', 'Total raw extraction (default)'],
+  ['minimize_weighted_resources', 'Balanced Resources', 'Weighted by map scarcity — default'],
+  ['minimize_resources', 'Minimize Resources', 'Total raw extraction, unweighted'],
   ['minimize_buildings', 'Minimize Buildings', 'Fewest machines overall'],
   ['minimize_power', 'Minimize Power', 'Lowest total MW draw'],
   ['minimize_specific_resources', 'Minimize Specific Resources', 'Conserve chosen raw materials'],
+  ['minimize_resource_types', 'Fewest Resource Types', 'Minimize distinct raw inputs'],
 ] as const;
 
 export function OptimizationPanel() {
@@ -46,6 +48,8 @@ export function OptimizationPanel() {
   const setAutoBalanceRespectClock = useFactoryStore((s) => s.setAutoBalanceRespectClock);
   const freeWater = useFactoryStore((s) => s.freeWater);
   const setFreeWater = useFactoryStore((s) => s.setFreeWater);
+  const enableResourceConversion = useFactoryStore((s) => s.enableResourceConversion);
+  const setEnableResourceConversion = useFactoryStore((s) => s.setEnableResourceConversion);
   const defaultMinerLevel = useFactoryStore((s) => s.defaultMinerLevel);
   const setDefaultMinerLevel = useFactoryStore((s) => s.setDefaultMinerLevel);
   const settings = useFactoryStore((s) => s.settings);
@@ -75,7 +79,7 @@ export function OptimizationPanel() {
     setClockEditing(false);
   }
 
-  const isActive = goal !== 'minimize_resources' || !freeWater;
+  const isActive = goal !== 'minimize_weighted_resources' || !freeWater || enableResourceConversion;
 
   const resourceItems = items
     .filter((i) => i.is_resource)
@@ -237,6 +241,22 @@ export function OptimizationPanel() {
               <div>
                 <div className="text-xs text-satisfactory-text">Treat Water as Free</div>
                 <div className="text-[9px] text-satisfactory-muted">Solver uses water freely, without minimizing it</div>
+              </div>
+            </label>
+          </Tooltip>
+
+          <Tooltip text="When enabled, the solver may use Converter recipes that convert one raw resource into another using SAM Ingots as a catalyst. Disabled by default." side="right" className="block mb-3">
+            <label className={`flex items-center gap-2 px-2 py-1.5 border transition-colors ${isGuestMode ? 'cursor-default' : 'cursor-pointer'} border-transparent hover:bg-satisfactory-border/20`}>
+              <input
+                type="checkbox"
+                checked={enableResourceConversion}
+                onChange={(e) => setEnableResourceConversion(e.target.checked)}
+                disabled={isGuestMode}
+                className="accent-satisfactory-orange disabled:opacity-50 disabled:cursor-not-allowed"
+              />
+              <div>
+                <div className="text-xs text-satisfactory-text">Enable Resource Conversion</div>
+                <div className="text-[9px] text-satisfactory-muted">Allow Converter recipes that swap raw resources via SAM Ingot</div>
               </div>
             </label>
           </Tooltip>

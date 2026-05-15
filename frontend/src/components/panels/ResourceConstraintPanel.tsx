@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useFactoryStore } from '../../stores/useFactoryStore';
 import { Tooltip } from '../Tooltip';
+import { MAP_RESOURCE_LIMITS } from '../../constants/resourceLimits';
 
 export function ResourceConstraintPanel() {
   const items = useFactoryStore((s) => s.items);
@@ -9,6 +10,7 @@ export function ResourceConstraintPanel() {
   const removeResourceConstraint = useFactoryStore((s) => s.removeResourceConstraint);
   const updateResourceConstraint = useFactoryStore((s) => s.updateResourceConstraint);
 
+  const setResourceConstraints = useFactoryStore((s) => s.setResourceConstraints);
   const isGuestMode = useFactoryStore((s) => s.isGuestMode);
 
   const [open, setOpen] = useState(false);
@@ -94,6 +96,22 @@ export function ResourceConstraintPanel() {
               </div>
             );
           })}
+
+          {!isGuestMode && (
+            <Tooltip text="Set limits for all resources to total map availability (all nodes at 100%, Mk.3 miners)" side="right">
+              <button
+                onClick={() => {
+                  const mapConstraints = Object.entries(MAP_RESOURCE_LIMITS).map(
+                    ([item_id, max_rate_per_minute]) => ({ item_id, max_rate_per_minute })
+                  );
+                  setResourceConstraints(mapConstraints);
+                }}
+                className="w-full mt-2 mb-1 px-2 py-1.5 text-[10px] font-industrial uppercase tracking-widest border border-satisfactory-border/40 text-satisfactory-muted hover:border-red-500/40 hover:text-red-400 transition-colors"
+              >
+                [Map Limits]
+              </button>
+            </Tooltip>
+          )}
 
           {!isGuestMode && (
             <div className="relative mt-2">

@@ -20,10 +20,12 @@ export interface ResourceConstraint {
 }
 
 export type OptimizationGoal =
+  | 'minimize_weighted_resources'
   | 'minimize_resources'
   | 'minimize_buildings'
   | 'minimize_power'
-  | 'minimize_specific_resources';
+  | 'minimize_specific_resources'
+  | 'minimize_resource_types';
 
 export interface SolveRequest {
   targets: ProductionTarget[];
@@ -40,6 +42,8 @@ export interface SolveRequest {
   miner_level?: number;
   /** When true, water is excluded from the objective so the solver uses it freely. */
   free_water?: boolean;
+  /** When true, resource conversion recipes (Converter + SAM Ingot) are allowed. Defaults to false. */
+  enable_resource_conversion?: boolean;
 }
 
 export interface ItemRate {
