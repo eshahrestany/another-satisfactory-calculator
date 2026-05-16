@@ -24,6 +24,7 @@ use satisfactory_calculator::solver::engine;
 
 #[derive(Copy, Clone, Debug, ValueEnum)]
 enum OptimizeArg {
+    Weighted,
     Resources,
     Buildings,
     Power,
@@ -33,6 +34,7 @@ enum OptimizeArg {
 impl From<OptimizeArg> for OptimizationGoal {
     fn from(a: OptimizeArg) -> Self {
         match a {
+            OptimizeArg::Weighted => OptimizationGoal::MinimizeWeightedResources,
             OptimizeArg::Resources => OptimizationGoal::MinimizeResources,
             OptimizeArg::Buildings => OptimizationGoal::MinimizeBuildings,
             OptimizeArg::Power => OptimizationGoal::MinimizePower,
@@ -144,8 +146,8 @@ struct Args {
     #[arg(long)]
     json: bool,
 
-    /// Optimization goal. Defaults to `resources`.
-    #[arg(long = "optimize", value_enum, default_value = "resources")]
+    /// Optimization goal. Defaults to `weighted` (scarcity-weighted resource minimization).
+    #[arg(long = "optimize", value_enum, default_value = "weighted")]
     optimize: OptimizeArg,
 
     /// When --optimize=specific, the item IDs to minimize (repeatable).
@@ -378,6 +380,7 @@ fn main() {
         optimization_target_resources: args.minimize_resources.clone(),
         miner_level: args.miner_level,
         free_water: args.free_water,
+        enable_resource_conversion: false,
     };
 
     // Print solve header
@@ -428,6 +431,7 @@ fn main() {
         eprintln!("  Caps: {}", args.caps.join(", "));
     }
     let goal_label = match args.optimize {
+        OptimizeArg::Weighted => "minimize weighted resources (scarcity)",
         OptimizeArg::Resources => "minimize resources",
         OptimizeArg::Buildings => "minimize buildings",
         OptimizeArg::Power => "minimize power",

@@ -9,8 +9,12 @@ pub struct ResourceConstraint {
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, Default, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum OptimizationGoal {
-    /// Minimize total raw resource extraction (current default).
+    /// Minimize raw resource extraction weighted by map scarcity (default).
+    /// Each resource is penalized proportionally to how rare it is on the map:
+    /// e.g. uranium costs ~33x more than iron per unit.
     #[default]
+    MinimizeWeightedResources,
+    /// Minimize total raw resource extraction (unweighted).
     MinimizeResources,
     /// Minimize the total number of factory buildings.
     MinimizeBuildings,
@@ -18,6 +22,9 @@ pub enum OptimizationGoal {
     MinimizePower,
     /// Minimize extraction of a user-selected subset of raw resources.
     MinimizeSpecificResources,
+    /// Minimize the number of distinct raw resource types extracted,
+    /// with MinimizeResources as a tiebreaker.
+    MinimizeResourceTypes,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -57,6 +64,10 @@ pub struct SolveRequest {
     /// uses however much water is needed without trying to minimize it.
     #[serde(default)]
     pub free_water: bool,
+    /// When false (default), resource conversion recipes (Converter building + SAM Ingot catalyst)
+    /// are excluded from the solve. When true, the solver may use them.
+    #[serde(default)]
+    pub enable_resource_conversion: bool,
 }
 
 fn default_miner_level() -> u8 {

@@ -8,6 +8,26 @@ use crate::models::solver_io::*;
 /// Virtual item ID for power output in power plant mode.
 const POWER_ITEM_ID: &str = "__power_mw";
 
+/// Total per-minute extraction capacity for each raw resource at 100% clock with Mk.3 miners,
+/// summed across all map nodes. Used to weight the MinimizeWeightedResources objective so that
+/// scarce resources are penalized more heavily than abundant ones.
+/// Source: Satisfactory 1.0 map totals (community-verified). Matches frontend resourceLimits.ts.
+const MAP_RESOURCE_LIMITS: &[(&str, f64)] = &[
+    ("Desc_OreIron_C",    70380.0),
+    ("Desc_OreCopper_C",  28860.0),
+    ("Desc_Stone_C",      52860.0),
+    ("Desc_Coal_C",       30900.0),
+    ("Desc_LiquidOil_C",  11700.0),
+    ("Desc_OreBauxite_C",  9780.0),
+    ("Desc_OreGold_C",    10200.0),
+    ("Desc_RawQuartz_C",  10500.0),
+    ("Desc_Sulfur_C",      6840.0),
+    ("Desc_OreUranium_C",  2100.0),
+    ("Desc_NitrogenGas_C",12000.0),
+    ("Desc_SAM_C",         9600.0),
+    // Water is excluded — treated as unlimited (effectively free).
+];
+
 /// Hardcoded nuclear waste output per fuel rod consumed.
 /// (waste_items_per_rod, waste_duration_seconds) → waste_per_min = items / duration * 60
 struct NuclearWaste {
@@ -192,6 +212,79 @@ fn build_virtual_generator_recipes(
 }
 
 pub fn solve(game_data: &GameData, request: &SolveRequest) -> Result<SolveResponse, String> {
+    if request.optimization_goal == OptimizationGoal::MinimizeResourceTypes {
+        return solve_fewest_resource_types(game_data, request);
+    }
+    solve_lp(game_data, request)
+}
+
+/// Compute the scarcity weight for a resource: min_map_limit / this_resource_limit.
+/// Resources not in MAP_RESOURCE_LIMITS get weight 1.0 (treated as the rarest tier).
+/// Water is always 0.0 (unlimited).
+fn resource_scarcity_weight(item_id: &str) -> f64 {
+    if item_id == "Desc_Water_C" {
+        return 0.0;
+    }
+    const MIN_LIMIT: f64 = 2100.0; // Uranium — rarest on the map
+    let limit = MAP_RESOURCE_LIMITS
+        .iter()
+        .find(|(id, _)| *id == item_id)
+        .map(|(_, l)| *l)
+        .unwrap_or(MIN_LIMIT); // unknown resources treated as rare
+    MIN_LIMIT / limit
+}
+
+fn solve_fewest_resource_types(game_data: &GameData, request: &SolveRequest) -> Result<SolveResponse, String> {
+    let mut base = request.clone();
+    base.optimization_goal = OptimizationGoal::MinimizeResources;
+    let baseline = solve_lp(game_data, &base)?;
+
+    // Sort used resources ascending by rate — try to eliminate least-used first.
+    let mut used: Vec<(String, f64)> = baseline
+        .summary
+        .raw_resources
+        .iter()
+        .filter(|r| r.rate_per_minute > 1e-6)
+        .map(|r| (r.item_id.clone(), r.rate_per_minute))
+        .collect();
+    used.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal));
+
+    let mut zeroed: Vec<String> = vec![];
+    for (resource_id, _) in &used {
+        zeroed.push(resource_id.clone());
+        let mut trial = base.clone();
+        trial.resource_constraints =
+            merge_resource_constraints(&request.resource_constraints, &zeroed);
+        if solve_lp(game_data, &trial).is_err() {
+            zeroed.pop();
+        }
+    }
+
+    let mut final_req = base.clone();
+    final_req.resource_constraints =
+        merge_resource_constraints(&request.resource_constraints, &zeroed);
+    solve_lp(game_data, &final_req)
+}
+
+fn merge_resource_constraints(
+    user: &[crate::models::solver_io::ResourceConstraint],
+    forced_zero: &[String],
+) -> Vec<crate::models::solver_io::ResourceConstraint> {
+    let mut result = user.to_vec();
+    for id in forced_zero {
+        if let Some(existing) = result.iter_mut().find(|c| &c.item_id == id) {
+            existing.max_rate_per_minute = 0.0;
+        } else {
+            result.push(crate::models::solver_io::ResourceConstraint {
+                item_id: id.clone(),
+                max_rate_per_minute: 0.0,
+            });
+        }
+    }
+    result
+}
+
+fn solve_lp(game_data: &GameData, request: &SolveRequest) -> Result<SolveResponse, String> {
     let is_power_mode = request.power_mode.is_some();
 
     if !is_power_mode && request.targets.is_empty() {
@@ -236,6 +329,13 @@ pub fn solve(game_data: &GameData, request: &SolveRequest) -> Result<SolveRespon
             })
             .collect()
     };
+
+    if !request.enable_resource_conversion {
+        allowed_recipes.retain(|r| {
+            !(r.building_id == "Desc_Converter_C"
+                && r.ingredients.iter().any(|i| i.item_id == "Desc_SAMIngot_C"))
+        });
+    }
 
     // Add virtual generator recipes
     for vr in &virtual_recipes {
@@ -525,6 +625,17 @@ pub fn solve(game_data: &GameData, request: &SolveRequest) -> Result<SolveRespon
     let epsilon_tiebreak = 1e-4_f64;
 
     let objective: Expression = match request.optimization_goal {
+        OptimizationGoal::MinimizeWeightedResources => {
+            tracing::debug!("Objective: minimize scarcity-weighted raw resource extraction (tiebreak: fewer buildings)");
+            let weighted = extract_vars
+                .iter()
+                .filter(|(id, _)| !(request.free_water && id.as_str() == "Desc_Water_C"))
+                .fold(Expression::from(0.0), |acc, (id, &v)| {
+                    let w = resource_scarcity_weight(id);
+                    if w > 0.0 { acc + w * v } else { acc }
+                });
+            weighted + epsilon_tiebreak * sum_production_vars()
+        }
         OptimizationGoal::MinimizeResources => {
             tracing::debug!("Objective: minimize total raw resource extraction (tiebreak: fewer buildings)");
             sum_all_extractions(&extract_vars) + epsilon_tiebreak * sum_production_vars()
@@ -575,6 +686,18 @@ pub fn solve(game_data: &GameData, request: &SolveRequest) -> Result<SolveRespon
 
             // Tiebreak: prefer fewer production buildings
             expr + epsilon_tiebreak * sum_production_vars()
+        }
+        OptimizationGoal::MinimizeResourceTypes => {
+            // Unreachable: dispatched before LP construction in solve().
+            tracing::warn!("MinimizeResourceTypes reached solve_lp — falling back to MinimizeWeightedResources");
+            let weighted = extract_vars
+                .iter()
+                .filter(|(id, _)| !(request.free_water && id.as_str() == "Desc_Water_C"))
+                .fold(Expression::from(0.0), |acc, (id, &v)| {
+                    let w = resource_scarcity_weight(id);
+                    if w > 0.0 { acc + w * v } else { acc }
+                });
+            weighted + epsilon_tiebreak * sum_production_vars()
         }
         OptimizationGoal::MinimizeSpecificResources => {
             let selected: std::collections::HashSet<&str> = request
